@@ -1,6 +1,6 @@
 {
   "name": "codexswitch-cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Seamlessly switch between multiple Codex accounts",
   "license": "MIT",
   "bin": {
@@ -13,11 +13,11 @@
     "node": ">=20"
   },
   "optionalDependencies": {
-    "codexswitch-cli-darwin-arm64": "0.3.1",
-    "codexswitch-cli-darwin-x64": "0.3.1",
-    "codexswitch-cli-linux-arm64": "0.3.1",
-    "codexswitch-cli-linux-x64": "0.3.1",
-    "codexswitch-cli-win32-x64": "0.3.1"
+    "codexswitch-cli-darwin-arm64": "0.3.2",
+    "codexswitch-cli-darwin-x64": "0.3.2",
+    "codexswitch-cli-linux-arm64": "0.3.2",
+    "codexswitch-cli-linux-x64": "0.3.2",
+    "codexswitch-cli-win32-x64": "0.3.2"
   },
   "files": [
     "bin"
