@@ -112,7 +112,24 @@ if "optionalDependencies" in data:
     }
 path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 PY
-  git add Cargo.toml package.json
+  python3 - <<PY
+import re
+from pathlib import Path
+
+path = Path("Cargo.lock")
+if path.exists():
+    text = path.read_text(encoding="utf-8")
+    text, count = re.subn(
+        r'(\[\[package\]\]\nname = "codexswitch-cli"\nversion = ")[^"]+(")',
+        r'\g<1>${new_ver}\g<2>',
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise SystemExit("Failed to update version in Cargo.lock")
+    path.write_text(text, encoding="utf-8")
+PY
+  git add Cargo.toml Cargo.lock package.json
   git commit -m "chore: bump version to v${new_ver}"
 
   cargo_ver="${new_ver}"
