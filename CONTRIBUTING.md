@@ -112,6 +112,11 @@ make release-tag ARGS="--bump patch"
 resolves the latest published release automatically, and you can still pin a
 specific version with `CODEXSWITCH_CLI_VERSION` or `--version`.
 
+GitHub releases are built from `v*` tags. crates.io publishing is skipped unless
+`CARGO_REGISTRY_TOKEN` is configured. npm publishing is skipped unless the repo
+variable `NPM_PUBLISH` is set to `true` and trusted publishing has been
+configured for the npm packages.
+
 ## Questions?
 
 Not sure if your idea fits? Ask in [Discussions](https://github.com/syntaxskills/codexswitch-cli/discussions) - we're happy to help!
