@@ -24,6 +24,9 @@ pub enum Commands {
         #[arg(value_name = "label")]
         #[arg(long)]
         label: Option<String>,
+        /// Also save ~/.codex/config.toml with this profile
+        #[arg(long)]
+        include_config: bool,
     },
     /// Load a saved profile
     Load {
@@ -179,7 +182,7 @@ pub fn label_clear_usage(name: &str) -> String {
 
 fn examples_root(name: &str) -> String {
     format!(
-        "Examples:\n  {name} save --label work\n  {name} load --label work\n  {name} list --json\n  {name} status --all --json\n  {name} export --output profiles-export.json\n  {name} import --input profiles-export.json\n  {name} delete --label work --yes\n\nUse `--json` for machine-readable success output. Run `{name} help <command>` for command-specific options."
+        "Examples:\n  {name} save --label work\n  {name} save --label third-party --include-config\n  {name} load --label work\n  {name} list --json\n  {name} status --all --json\n  {name} export --output profiles-export.json\n  {name} import --input profiles-export.json\n  {name} delete --label work --yes\n\nUse `--json` for machine-readable success output. Run `{name} help <command>` for command-specific options."
     )
 }
 

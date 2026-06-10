@@ -139,8 +139,7 @@ struct UsageBucket {
 }
 
 pub fn read_base_url(paths: &Paths) -> Result<String, String> {
-    let config_path = paths.codex.join("config.toml");
-    if let Ok(contents) = fs::read_to_string(config_path) {
+    if let Ok(contents) = fs::read_to_string(&paths.config) {
         for line in contents.lines() {
             if let Some(value) = parse_config_value(line, "chatgpt_base_url") {
                 return validate_base_url(&value);

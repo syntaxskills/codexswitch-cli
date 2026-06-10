@@ -167,6 +167,11 @@ impl TestEnv {
         fs::read_to_string(path).expect("read auth.json")
     }
 
+    fn read_config(&self) -> String {
+        let path = self.codex_dir().join("config.toml");
+        fs::read_to_string(path).expect("read config.toml")
+    }
+
     fn run(&self, args: &[&str]) -> String {
         let output = self.run_output(args);
         self.assert_success(args, output)
@@ -283,6 +288,17 @@ fn profile_label(env: &TestEnv, id: &str) -> Option<String> {
 fn read_json_file(path: &PathBuf) -> serde_json::Value {
     let raw = fs::read_to_string(path).expect("read json file");
     serde_json::from_str(&raw).expect("parse json file")
+}
+
+fn assert_managed_files(value: &serde_json::Value, expected: &[&str]) {
+    let actual: Vec<String> = value
+        .get("managed_files")
+        .and_then(|value| value.as_array())
+        .expect("managed_files array")
+        .iter()
+        .map(|value| value.as_str().expect("managed file string").to_string())
+        .collect();
+    assert_eq!(actual, expected);
 }
 
 fn resolve_bin_path() -> PathBuf {
@@ -499,8 +515,88 @@ fn ui_save_command() {
     let output = env.run(&["save", "--label", "alpha"]);
     assert!(output.contains("Saved profile"));
     assert!(output.contains("alpha@example.com"));
+    assert!(output.contains("[files: auth.json]"));
     let profile_path = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
     assert!(profile_path.is_file());
+}
+
+#[test]
+fn ui_save_include_config_stores_sidecar_and_metadata() {
+    let env = TestEnv::new();
+    seed_alpha(&env);
+    env.write_config("http://third-party.example/backend-api");
+
+    let output = env.run(&["save", "--label", "alpha", "--include-config"]);
+
+    assert!(output.contains("Saved profile"));
+    assert!(output.contains("[files: auth.json + config.toml]"));
+    let profile_path = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
+    let config_path = env.profiles_dir().join(format!("{ALPHA_ID}.config.toml"));
+    assert!(profile_path.is_file());
+    assert!(config_path.is_file());
+    assert!(
+        fs::read_to_string(config_path)
+            .expect("read saved config")
+            .contains("third-party.example")
+    );
+
+    let index = read_json_file(&env.profiles_dir().join("profiles.json"));
+    assert_managed_files(
+        index
+            .get("profiles")
+            .and_then(|profiles| profiles.get(ALPHA_ID))
+            .expect("alpha index entry"),
+        &["auth.json", "config.toml"],
+    );
+}
+
+#[test]
+fn ui_save_include_config_missing_config_errors() {
+    let env = TestEnv::new();
+    seed_alpha(&env);
+
+    let err = env.run_expect_error(&["save", "--label", "alpha", "--include-config"]);
+
+    assert!(err.contains("Config file not found"));
+    assert!(
+        !env.profiles_dir()
+            .join(format!("{ALPHA_ID}.json"))
+            .is_file()
+    );
+    assert!(
+        !env.profiles_dir()
+            .join(format!("{ALPHA_ID}.config.toml"))
+            .is_file()
+    );
+}
+
+#[test]
+fn ui_save_without_include_config_removes_stale_sidecar() {
+    let env = TestEnv::new();
+    seed_alpha(&env);
+    env.write_config("http://third-party.example/backend-api");
+    env.run(&["save", "--label", "alpha", "--include-config"]);
+    assert!(
+        env.profiles_dir()
+            .join(format!("{ALPHA_ID}.config.toml"))
+            .is_file()
+    );
+
+    env.run(&["save", "--label", "alpha"]);
+
+    assert!(
+        !env.profiles_dir()
+            .join(format!("{ALPHA_ID}.config.toml"))
+            .is_file()
+    );
+    let index = read_json_file(&env.profiles_dir().join("profiles.json"));
+    assert_managed_files(
+        index
+            .get("profiles")
+            .and_then(|profiles| profiles.get(ALPHA_ID))
+            .expect("alpha index entry"),
+        &["auth.json"],
+    );
 }
 
 #[cfg(unix)]
@@ -840,6 +936,48 @@ fn ui_import_profiles_command() {
             assert_eq!(mode, 0o600);
         }
     }
+}
+
+#[test]
+fn ui_export_import_preserves_config_profiles() {
+    let src = TestEnv::new();
+    seed_alpha(&src);
+    src.run(&["save", "--label", "alpha"]);
+    seed_beta(&src);
+    src.write_config("http://third-party.example/backend-api");
+    src.run(&["save", "--label", "beta", "--include-config"]);
+    let export_path = src.home_path().join("profiles-export.json");
+    src.run(&["export", "--output", export_path.to_str().unwrap()]);
+
+    let bundle = read_json_file(&export_path);
+    let profiles = bundle
+        .get("profiles")
+        .and_then(|value| value.as_array())
+        .expect("profiles array");
+    let beta = profiles
+        .iter()
+        .find(|profile| profile.get("id") == Some(&serde_json::json!(BETA_ID)))
+        .expect("beta profile");
+    assert_managed_files(beta, &["auth.json", "config.toml"]);
+    assert!(
+        beta.get("config_toml")
+            .and_then(|value| value.as_str())
+            .is_some_and(|contents| contents.contains("third-party.example"))
+    );
+
+    let dest = TestEnv::new();
+    dest.run(&["import", "--input", export_path.to_str().unwrap()]);
+    let imported_config = dest.profiles_dir().join(format!("{BETA_ID}.config.toml"));
+    assert!(imported_config.is_file());
+    assert!(
+        fs::read_to_string(&imported_config)
+            .expect("read imported config")
+            .contains("third-party.example")
+    );
+
+    dest.run(&["load", "--label", "beta"]);
+    assert!(dest.read_auth().contains(BETA_ACCOUNT));
+    assert!(dest.read_config().contains("third-party.example"));
 }
 
 #[test]
@@ -1357,7 +1495,45 @@ fn ui_load_command() {
     let output = env.run(&["load", "--label", "beta"]);
     assert!(output.contains("Loaded profile"));
     assert!(output.contains("beta@example.com"));
+    assert!(output.contains("[files: auth.json]"));
     assert!(env.read_auth().contains(BETA_ACCOUNT));
+}
+
+#[test]
+fn ui_load_profile_with_config_restores_auth_and_config() {
+    let env = TestEnv::new();
+    seed_alpha(&env);
+    env.write_config("http://alpha-provider.example/backend-api");
+    env.run(&["save", "--label", "alpha", "--include-config"]);
+
+    seed_beta(&env);
+    env.write_config("http://beta-runtime.example/backend-api");
+    env.run(&["save", "--label", "beta"]);
+
+    let output = env.run(&["load", "--label", "alpha"]);
+
+    assert!(output.contains("Loaded profile"));
+    assert!(output.contains("[files: auth.json + config.toml]"));
+    assert!(env.read_auth().contains(ALPHA_ACCOUNT));
+    assert!(env.read_config().contains("alpha-provider.example"));
+}
+
+#[test]
+fn ui_load_auth_only_profile_does_not_restore_config() {
+    let env = TestEnv::new();
+    seed_alpha(&env);
+    env.write_config("http://alpha-provider.example/backend-api");
+    env.run(&["save", "--label", "alpha"]);
+
+    seed_beta(&env);
+    env.write_config("http://beta-runtime.example/backend-api");
+    env.run(&["save", "--label", "beta"]);
+
+    let output = env.run(&["load", "--label", "alpha"]);
+
+    assert!(output.contains("[files: auth.json]"));
+    assert!(env.read_auth().contains(ALPHA_ACCOUNT));
+    assert!(env.read_config().contains("beta-runtime.example"));
 }
 
 #[cfg(unix)]
@@ -1497,6 +1673,25 @@ fn ui_delete_command() {
 }
 
 #[test]
+fn ui_delete_removes_saved_config_sidecar() {
+    let env = TestEnv::new();
+    seed_alpha(&env);
+    env.write_config("http://third-party.example/backend-api");
+    env.run(&["save", "--label", "alpha", "--include-config"]);
+    let config_path = env.profiles_dir().join(format!("{ALPHA_ID}.config.toml"));
+    assert!(config_path.is_file());
+
+    env.run(&["delete", "--label", "alpha", "--yes"]);
+
+    assert!(
+        !env.profiles_dir()
+            .join(format!("{ALPHA_ID}.json"))
+            .is_file()
+    );
+    assert!(!config_path.is_file());
+}
+
+#[test]
 fn ui_delete_by_id_command() {
     let env = TestEnv::new();
     seed_profiles(&env);
@@ -1593,6 +1788,7 @@ fn ui_list_command() {
     let output = env.run(&["list"]);
     assert!(output.contains("current@example.com"));
     assert!(output.contains("<- active"));
+    assert!(output.contains("[files: auth.json]"));
     assert!(output.contains("Warning: This profile is not saved yet."));
     assert!(output.contains("Run `codexswitch-cli save` to save this profile."));
     assert!(output.contains("alpha@example.com"));
@@ -1675,6 +1871,38 @@ fn ui_list_json_exposes_ids_for_scripting() {
 
     assert_eq!(profiles[2].get("id").unwrap(), &serde_json::json!(BETA_ID));
     assert_eq!(profiles[2].get("label").unwrap(), &serde_json::Value::Null);
+    assert_managed_files(&profiles[2], &["auth.json"]);
+}
+
+#[test]
+fn ui_list_shows_and_serializes_managed_files() {
+    let env = TestEnv::new();
+    seed_alpha(&env);
+    env.run(&["save", "--label", "alpha"]);
+    seed_beta(&env);
+    env.write_config("http://third-party.example/backend-api");
+    env.run(&["save", "--label", "beta", "--include-config"]);
+
+    let output = env.run(&["list"]);
+    assert!(output.contains("[files: auth.json]"));
+    assert!(output.contains("[files: auth.json + config.toml]"));
+
+    let json: serde_json::Value =
+        serde_json::from_str(&env.run(&["list", "--json"])).expect("parse list json");
+    let profiles = json
+        .get("profiles")
+        .and_then(|value| value.as_array())
+        .expect("profiles array");
+    let alpha = profiles
+        .iter()
+        .find(|profile| profile.get("id") == Some(&serde_json::json!(ALPHA_ID)))
+        .expect("alpha profile");
+    let beta = profiles
+        .iter()
+        .find(|profile| profile.get("id") == Some(&serde_json::json!(BETA_ID)))
+        .expect("beta profile");
+    assert_managed_files(alpha, &["auth.json"]);
+    assert_managed_files(beta, &["auth.json", "config.toml"]);
 }
 
 #[test]
@@ -1847,6 +2075,7 @@ fn ui_status_json_command() {
     );
     assert_eq!(profile.get("is_current").unwrap(), &serde_json::json!(true));
     assert_eq!(profile.get("is_saved").unwrap(), &serde_json::json!(true));
+    assert_managed_files(&profile, &["auth.json"]);
     assert!(profile.get("details").is_none());
     assert_eq!(profile.get("error").unwrap(), &serde_json::Value::Null);
     let usage = profile.get("usage").expect("usage");
@@ -1973,6 +2202,23 @@ fn ui_status_label_json_command() {
     let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
     assert_eq!(profile.get("id").unwrap(), &serde_json::json!(BETA_ID));
     assert_eq!(profile.get("label").unwrap(), &serde_json::json!("beta"));
+
+    let _ = usage_handle.join();
+}
+
+#[test]
+fn ui_status_json_serializes_managed_files_for_config_profile() {
+    let env = TestEnv::new();
+    seed_beta(&env);
+    let usage_body = r#"{"rate_limit":{"primary_window":{"used_percent":20,"limit_window_seconds":18000,"reset_at":2000000000}}}"#;
+    let (usage_addr, usage_handle) = start_usage_server(usage_body, 6).expect("usage server");
+    env.write_config(&format!("http://{usage_addr}/backend-api"));
+    env.run(&["save", "--label", "beta", "--include-config"]);
+
+    let output = env.run(&["status", "--label", "beta", "--json"]);
+    let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    assert_eq!(profile.get("id").unwrap(), &serde_json::json!(BETA_ID));
+    assert_managed_files(&profile, &["auth.json", "config.toml"]);
 
     let _ = usage_handle.join();
 }
@@ -2760,6 +3006,7 @@ fn json_save_returns_success_shape() {
     let profile = &v["profile"];
     assert!(profile["id"].is_string(), "profile.id is string");
     assert_eq!(profile["label"], "work", "profile.label");
+    assert_managed_files(profile, &["auth.json"]);
     assert!(profile.get("default").is_none(), "profile.default removed");
 }
 
@@ -2777,6 +3024,7 @@ fn json_load_returns_success_shape() {
     let profile = &v["profile"];
     assert!(profile["id"].is_string());
     assert_eq!(profile["label"], "alpha");
+    assert_managed_files(profile, &["auth.json"]);
     assert!(profile.get("default").is_none());
 }
 

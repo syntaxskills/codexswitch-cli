@@ -136,6 +136,7 @@ pub(crate) fn http_ok_response(body: &str, content_type: &str) -> String {
 pub(crate) fn make_paths(root: &Path) -> Paths {
     let codex = root.to_path_buf();
     let auth = codex.join("auth.json");
+    let config = codex.join("config.toml");
     let profiles = codex.join("profiles");
     let profiles_index = profiles.join("profiles.json");
     let update_cache = profiles.join("update.json");
@@ -143,6 +144,7 @@ pub(crate) fn make_paths(root: &Path) -> Paths {
     Paths {
         codex,
         auth,
+        config,
         profiles,
         profiles_index,
         update_cache,

@@ -501,6 +501,7 @@ fn paths_for_update(codex_home: PathBuf) -> Paths {
     let profiles = codex_home.join("profiles");
     Paths {
         auth: codex_home.join("auth.json"),
+        config: codex_home.join("config.toml"),
         profiles_index: profiles.join("profiles.json"),
         update_cache: profiles.join("update.json"),
         profiles_lock: profiles.join("profiles.lock"),

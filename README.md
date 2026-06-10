@@ -73,6 +73,7 @@ Requires Rust 1.94+
 
 ```bash
 codexswitch-cli save --label work
+codexswitch-cli save --label third-party --include-config
 codexswitch-cli list
 codexswitch-cli load --label work --force
 ```
@@ -95,8 +96,8 @@ The npm package also installs `codexswitch` and `codex-profiles` command aliases
   </thead>
   <tbody>
     <tr>
-      <td width="43%"><code>codexswitch-cli save</code><br/><code>[--label &lt;name&gt;]</code></td>
-      <td>Save current <code>auth.json</code><br/>Optional label</td>
+      <td width="43%"><code>codexswitch-cli save</code><br/><code>[--label &lt;name&gt;]</code><br/><code>[--include-config]</code></td>
+      <td>Save current <code>auth.json</code><br/>Optionally include <code>config.toml</code> for provider-specific profiles</td>
     </tr>
     <tr>
       <td width="43%"><code>codexswitch-cli load</code><br/><code>(--label &lt;name&gt; | --id &lt;profile-id&gt;)</code><br/><code>[--force]</code></td>
@@ -144,6 +145,9 @@ The npm package also installs `codexswitch` and `codex-profiles` command aliases
 ### Notes
 
 - `load` and `delete` are interactive unless you pass `--label` or `--id`
+- Profiles are auth-only by default: saving without `--include-config` stores and restores only `auth.json`
+- Use `save --include-config` for third-party or custom-provider profiles that also need `~/.codex/config.toml`
+- `list`, `status`, and JSON output show `managed_files`, for example `auth.json` or `auth.json + config.toml`
 - Export bundles contain secrets
 
 ## More Docs

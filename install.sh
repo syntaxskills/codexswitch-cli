@@ -289,11 +289,19 @@ main() {
     
     if [ -f "$INSTALL_DIR/$binary_name" ]; then
         local installed_version
-        installed_version="$("$INSTALL_DIR/$binary_name" --version 2>&1 || echo "unknown")"
-        installed_version="$(echo "$installed_version" | head -1)"
-        info "Successfully installed: $installed_version"
+        if installed_version="$("$INSTALL_DIR/$binary_name" --version 2>&1)"; then
+            installed_version="$(printf '%s\n' "$installed_version" | head -n 1)"
+            if [ -n "$installed_version" ]; then
+                info "Successfully installed: $installed_version"
+            else
+                warn "installed binary did not report a version"
+                info "Successfully installed: $INSTALL_DIR/$binary_name"
+            fi
+        else
+            error "installation failed: '$INSTALL_DIR/$binary_name --version' did not run successfully:\n$installed_version"
+        fi
     else
-        error "installation failed: binary is not executable"
+        error "installation failed: binary was not copied"
     fi
     
     local install_dir_no_trailing="${INSTALL_DIR%/}"

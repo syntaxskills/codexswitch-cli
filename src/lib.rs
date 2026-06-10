@@ -77,7 +77,10 @@ fn run(cli: Cli) -> Result<(), String> {
     }
 
     match cli.command {
-        Commands::Save { label } => save_profile(&paths, label, json),
+        Commands::Save {
+            label,
+            include_config,
+        } => save_profile(&paths, label, include_config, json),
         Commands::Load { label, id, force } => load_profile(&paths, label, id, force, json),
         Commands::List { show_id } => list_profiles(&paths, json, show_id),
         Commands::Export { label, id, output } => export_profiles(&paths, label, id, output, json),

@@ -28,6 +28,7 @@ const UNEXPECTED_HTTP_BODY_MAX_BYTES: usize = 1000;
 pub struct Paths {
     pub codex: PathBuf,
     pub auth: PathBuf,
+    pub config: PathBuf,
     pub profiles: PathBuf,
     pub profiles_index: PathBuf,
     pub update_cache: PathBuf,
@@ -103,6 +104,7 @@ pub fn resolve_paths() -> Result<Paths, String> {
     let home_dir = resolve_home_dir().ok_or_else(|| COMMON_ERR_RESOLVE_HOME.to_string())?;
     let codex_dir = home_dir.join(".codex");
     let auth = codex_dir.join("auth.json");
+    let config = codex_dir.join("config.toml");
     let profiles = codex_dir.join("profiles");
     let profiles_index = profiles.join("profiles.json");
     let update_cache = profiles.join("update.json");
@@ -110,6 +112,7 @@ pub fn resolve_paths() -> Result<Paths, String> {
     Ok(Paths {
         codex: codex_dir,
         auth,
+        config,
         profiles,
         profiles_index,
         update_cache,

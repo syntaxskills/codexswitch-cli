@@ -51,6 +51,8 @@ const DEFAULT_USAGE_CONCURRENCY: usize = 32;
 const MAX_USAGE_CONCURRENCY: usize = 128;
 const USAGE_CONCURRENCY_ENV: &str = "CODEXSWITCH_CLI_USAGE_CONCURRENCY";
 const LEGACY_USAGE_CONCURRENCY_ENV: &str = "CODEX_PROFILES_USAGE_CONCURRENCY";
+const AUTH_FILE_NAME: &str = "auth.json";
+const CONFIG_FILE_NAME: &str = "config.toml";
 
 #[derive(Serialize, Deserialize)]
 struct ExportBundle {
@@ -63,27 +65,52 @@ struct ExportedProfile {
     id: String,
     label: Option<String>,
     contents: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    managed_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    config_toml: Option<String>,
 }
 
 struct PreparedImportProfile {
     id: String,
     label: Option<String>,
     contents: Vec<u8>,
+    managed_files: Vec<String>,
+    config_toml: Option<Vec<u8>>,
     tokens: Tokens,
 }
 
-pub fn save_profile(paths: &Paths, label: Option<String>, json: bool) -> Result<(), String> {
+pub fn save_profile(
+    paths: &Paths,
+    label: Option<String>,
+    include_config: bool,
+    json: bool,
+) -> Result<(), String> {
     let use_color = use_color_stdout();
     let mut store = ProfileStore::load(paths)?;
     let tokens = read_tokens(&paths.auth)?;
     let id = resolve_save_id(paths, &mut store.profiles_index, &tokens)?;
+    let managed_files = managed_files_for_save(include_config);
 
     if let Some(label) = label.as_deref() {
         assign_label(&mut store.labels, label, &id)?;
     }
 
     let target = profile_path_for_id(&paths.profiles, &id);
+    let config_target = profile_config_path_for_id(&paths.profiles, &id);
+    if include_config && !paths.config.is_file() {
+        return Err(format!(
+            "Error: Config file not found: {}",
+            paths.config.display()
+        ));
+    }
+    if !include_config {
+        remove_profile_config_if_present(&config_target)?;
+    }
     copy_profile(&paths.auth, &target, PROFILE_COPY_CONTEXT_SAVE)?;
+    if include_config {
+        copy_profile(&paths.config, &config_target, PROFILE_COPY_CONTEXT_SAVE)?;
+    }
 
     let label_display = label_for_id(&store.labels, &id);
     update_profiles_index_entry(
@@ -91,6 +118,7 @@ pub fn save_profile(paths: &Paths, label: Option<String>, json: bool) -> Result<
         &id,
         Some(&tokens),
         label_display.clone(),
+        Some(managed_files.clone()),
     );
     store.save(paths)?;
 
@@ -100,6 +128,7 @@ pub fn save_profile(paths: &Paths, label: Option<String>, json: bool) -> Result<
             serde_json::json!({
                 "id": id,
                 "label": label_display,
+                "managed_files": managed_files,
             }),
         );
         result.print()?;
@@ -113,6 +142,7 @@ pub fn save_profile(paths: &Paths, label: Option<String>, json: bool) -> Result<
         PROFILE_MSG_SAVED.to_string()
     };
     let mut message = format_action(&message, use_color);
+    message.push_str(&format_managed_files_suffix(&managed_files, use_color));
     if label_display.is_none() {
         message.push('\n');
         message.push_str(&format_label_later_hint(&id, use_color));
@@ -249,10 +279,26 @@ pub fn export_profiles(
             .map_err(|err| crate::msg2(PROFILE_ERR_READ_PROFILES_DIR, path.display(), err))?;
         let contents: serde_json::Value = serde_json::from_str(&raw)
             .map_err(|err| format!("Error: Saved profile '{}' is invalid JSON: {err}", id))?;
+        let managed_files =
+            managed_files_for_profile(&paths.profiles, &id, store.profiles_index.profiles.get(&id));
+        let config_toml = if managed_files_contains_config(&managed_files) {
+            let config_path = profile_config_path_for_id(&paths.profiles, &id);
+            Some(fs::read_to_string(&config_path).map_err(|err| {
+                format!(
+                    "Error: Saved profile '{}' is missing config.toml at {}: {err}",
+                    id,
+                    config_path.display()
+                )
+            })?)
+        } else {
+            None
+        };
         profiles.push(ExportedProfile {
             label: label_for_id(&store.labels, &id),
             id,
             contents,
+            managed_files,
+            config_toml,
         });
     }
 
@@ -335,6 +381,13 @@ pub fn import_profiles(paths: &Paths, input: PathBuf, json: bool) -> Result<(), 
             return Err(err);
         }
         written_ids.push(profile.id.clone());
+        if let Some(config_toml) = profile.config_toml.as_deref() {
+            let config_path = profile_config_path_for_id(&paths.profiles, &profile.id);
+            if let Err(err) = crate::common::write_atomic_private(&config_path, config_toml) {
+                cleanup_imported_profiles(paths, &written_ids);
+                return Err(err);
+            }
+        }
     }
 
     for profile in &prepared {
@@ -346,6 +399,7 @@ pub fn import_profiles(paths: &Paths, input: PathBuf, json: bool) -> Result<(), 
             &profile.id,
             Some(&profile.tokens),
             profile.label.clone(),
+            Some(profile.managed_files.clone()),
         );
     }
     if let Err(err) = store.save(paths) {
@@ -363,6 +417,7 @@ pub fn import_profiles(paths: &Paths, input: PathBuf, json: bool) -> Result<(), 
                 serde_json::json!({
                     "id": p.id,
                     "label": p.label,
+                    "managed_files": p.managed_files,
                 })
             })
             .collect();
@@ -402,7 +457,7 @@ pub fn load_profile(
     {
         match prompt_unsaved_load(paths, &reason)? {
             LoadChoice::SaveAndContinue => {
-                save_profile(paths, None, false)?;
+                save_profile(paths, None, false, false)?;
                 let no_profiles = format_no_profiles(paths, use_color_err);
                 let result = load_snapshot_ordered(paths, true, &no_profiles)?;
                 snapshot = result.0;
@@ -450,8 +505,27 @@ pub fn load_profile(
     if !source.is_file() {
         return Err(profile_not_found(use_color_err));
     }
+    let managed_files = managed_files_for_profile(
+        &paths.profiles,
+        &selected_id,
+        store.profiles_index.profiles.get(&selected_id),
+    );
+    if managed_files_contains_config(&managed_files) {
+        let source_config = profile_config_path_for_id(&paths.profiles, &selected_id);
+        if !source_config.is_file() {
+            return Err(format!(
+                "Error: Saved profile '{}' includes config.toml but {} is missing.",
+                selected_id,
+                source_config.display()
+            ));
+        }
+    }
 
     copy_profile(&source, &paths.auth, PROFILE_COPY_CONTEXT_LOAD)?;
+    if managed_files_contains_config(&managed_files) {
+        let source_config = profile_config_path_for_id(&paths.profiles, &selected_id);
+        copy_profile(&source_config, &paths.config, PROFILE_COPY_CONTEXT_LOAD)?;
+    }
 
     let label = label_for_id(&store.labels, &selected_id);
     let tokens = snapshot
@@ -463,6 +537,7 @@ pub fn load_profile(
         &selected_id,
         tokens,
         label.clone(),
+        Some(managed_files.clone()),
     );
     store.save(paths)?;
 
@@ -472,16 +547,18 @@ pub fn load_profile(
             serde_json::json!({
                 "id": selected_id,
                 "label": label,
+                "managed_files": managed_files,
             }),
         );
         result.print()?;
         return Ok(());
     }
 
-    let message = format_action(
+    let mut message = format_action(
         &crate::msg1(PROFILE_MSG_LOADED_WITH, selected_display),
         use_color_out,
     );
+    message.push_str(&format_managed_files_suffix(&managed_files, use_color_out));
     print_output_block(&message);
     Ok(())
 }
@@ -529,6 +606,8 @@ pub fn delete_profile(
             return Err(profile_not_found(use_color_err));
         }
         fs::remove_file(&target).map_err(|err| crate::msg1(PROFILE_ERR_FAILED_DELETE, err))?;
+        remove_profile_config_if_present(&profile_config_path_for_id(&paths.profiles, selected))
+            .map_err(|err| crate::msg1(PROFILE_ERR_FAILED_DELETE, err))?;
         remove_labels_for_id(&mut store.labels, selected);
         store.profiles_index.profiles.remove(selected);
     }
@@ -572,6 +651,7 @@ pub fn list_profiles(paths: &Paths, json: bool, show_id: bool) -> Result<(), Str
         current_saved_id.as_deref(),
         &snapshot.labels,
         &snapshot.tokens,
+        &snapshot.index,
         &ctx,
     );
     let has_saved = !ordered.is_empty();
@@ -643,7 +723,14 @@ pub fn status_profiles(
     }
     let labels = &snapshot.labels;
     let tokens_map = &snapshot.tokens;
-    let current_entry = make_current(paths, current_saved_id.as_deref(), labels, tokens_map, &ctx);
+    let current_entry = make_current(
+        paths,
+        current_saved_id.as_deref(),
+        labels,
+        tokens_map,
+        &snapshot.index,
+        &ctx,
+    );
     if json {
         return print_current_status_json(current_entry);
     }
@@ -733,6 +820,7 @@ fn status_all_profiles(paths: &Paths, json: bool) -> Result<(), String> {
                 current_saved_id.as_deref(),
                 &snapshot.labels,
                 &snapshot.tokens,
+                &snapshot.index,
                 &ctx,
             )
         },
@@ -817,6 +905,8 @@ struct ProfileIndexEntry {
     workspace_or_org_id: Option<String>,
     #[serde(default)]
     plan_type_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    managed_files: Vec<String>,
 }
 
 fn profiles_index_version() -> u8 {
@@ -1009,6 +1099,7 @@ fn update_profiles_index_entry(
     id: &str,
     tokens: Option<&Tokens>,
     label: Option<String>,
+    managed_files: Option<Vec<String>>,
 ) {
     let entry = index.profiles.entry(id.to_string()).or_default();
     if let Some(tokens) = tokens {
@@ -1025,6 +1116,9 @@ fn update_profiles_index_entry(
     }
     if let Some(label) = label {
         entry.label = Some(label);
+    }
+    if let Some(managed_files) = managed_files {
+        entry.managed_files = normalize_managed_files(managed_files);
     }
 }
 
@@ -1132,6 +1226,97 @@ pub fn profile_path_for_id(profiles_dir: &Path, id: &str) -> PathBuf {
     profiles_dir.join(format!("{id}.json"))
 }
 
+pub fn profile_config_path_for_id(profiles_dir: &Path, id: &str) -> PathBuf {
+    profiles_dir.join(format!("{id}.config.toml"))
+}
+
+fn managed_files_for_save(include_config: bool) -> Vec<String> {
+    let mut files = vec![AUTH_FILE_NAME.to_string()];
+    if include_config {
+        files.push(CONFIG_FILE_NAME.to_string());
+    }
+    files
+}
+
+fn active_managed_files(paths: &Paths) -> Vec<String> {
+    managed_files_for_save(paths.config.is_file())
+}
+
+fn managed_files_for_profile(
+    profiles_dir: &Path,
+    id: &str,
+    index_entry: Option<&ProfileIndexEntry>,
+) -> Vec<String> {
+    let mut files = index_entry
+        .map(|entry| entry.managed_files.clone())
+        .unwrap_or_default();
+    if files.is_empty() {
+        files.push(AUTH_FILE_NAME.to_string());
+    }
+    if profile_config_path_for_id(profiles_dir, id).is_file()
+        && !files.iter().any(|file| file == CONFIG_FILE_NAME)
+    {
+        files.push(CONFIG_FILE_NAME.to_string());
+    }
+    normalize_managed_files(files)
+}
+
+fn normalize_managed_files(files: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = vec![AUTH_FILE_NAME.to_string()];
+    seen.insert(AUTH_FILE_NAME.to_string());
+    let mut has_config = false;
+    let mut custom = Vec::new();
+
+    for file in files {
+        let file = file.trim();
+        if file.is_empty() || file == AUTH_FILE_NAME {
+            continue;
+        }
+        if file == CONFIG_FILE_NAME {
+            has_config = true;
+            continue;
+        }
+        if seen.insert(file.to_string()) {
+            custom.push(file.to_string());
+        }
+    }
+
+    if has_config {
+        out.push(CONFIG_FILE_NAME.to_string());
+    }
+    out.extend(custom);
+    out
+}
+
+fn managed_files_contains_config(files: &[String]) -> bool {
+    files.iter().any(|file| file == CONFIG_FILE_NAME)
+}
+
+fn format_managed_files(files: &[String]) -> String {
+    files.join(" + ")
+}
+
+fn format_managed_files_suffix(files: &[String], use_color: bool) -> String {
+    style_text(
+        &format!(" [files: {}]", format_managed_files(files)),
+        use_color,
+        |text| text.dimmed(),
+    )
+}
+
+fn remove_profile_config_if_present(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(path).map_err(|err| {
+        format!(
+            "Error: Could not remove saved config {}: {err}",
+            path.display()
+        )
+    })
+}
+
 pub fn collect_profile_ids(profiles_dir: &Path) -> Result<HashSet<String>, String> {
     let mut ids = HashSet::new();
     for path in profile_files(profiles_dir)? {
@@ -1181,7 +1366,27 @@ fn prepare_import_profile(profile: ExportedProfile) -> Result<PreparedImportProf
         id,
         label,
         contents,
+        managed_files,
+        config_toml,
     } = profile;
+    let mut managed_files = normalize_managed_files(managed_files);
+    if config_toml.is_some() && !managed_files_contains_config(&managed_files) {
+        managed_files.push(CONFIG_FILE_NAME.to_string());
+        managed_files = normalize_managed_files(managed_files);
+    }
+    if managed_files_contains_config(&managed_files) && config_toml.is_none() {
+        return Err(format!(
+            "Error: Exported profile '{}' includes config.toml but no config_toml field.",
+            id
+        ));
+    }
+    let config_toml = config_toml.map(|contents| {
+        let mut bytes = contents.into_bytes();
+        if !bytes.ends_with(b"\n") {
+            bytes.push(b'\n');
+        }
+        bytes
+    });
     let mut bytes = serde_json::to_vec_pretty(&contents).map_err(|err| {
         format!(
             "Error: Exported profile '{}' could not be serialized: {err}",
@@ -1210,6 +1415,8 @@ fn prepare_import_profile(profile: ExportedProfile) -> Result<PreparedImportProf
         id,
         label,
         contents: bytes,
+        managed_files,
+        config_toml,
         tokens,
     })
 }
@@ -1228,6 +1435,7 @@ fn validate_import_profile_id(id: &str) -> Result<(), String> {
 fn cleanup_imported_profiles(paths: &Paths, ids: &[String]) {
     for id in ids {
         let _ = fs::remove_file(profile_path_for_id(&paths.profiles, id));
+        let _ = fs::remove_file(profile_config_path_for_id(&paths.profiles, id));
     }
 }
 
@@ -1467,11 +1675,18 @@ fn rename_profile_id(
     }
     let from_path = profile_path_for_id(&paths.profiles, from);
     let to_path = profile_path_for_id(&paths.profiles, &desired);
+    let from_config_path = profile_config_path_for_id(&paths.profiles, from);
+    let to_config_path = profile_config_path_for_id(&paths.profiles, &desired);
     if !from_path.is_file() {
         return Err(crate::msg1(PROFILE_ERR_ID_NOT_FOUND, from));
     }
     fs::rename(&from_path, &to_path)
         .map_err(|err| crate::msg2(PROFILE_ERR_RENAME_PROFILE, from, err))?;
+    if from_config_path.is_file() {
+        remove_profile_config_if_present(&to_config_path)?;
+        fs::rename(&from_config_path, &to_config_path)
+            .map_err(|err| crate::msg2(PROFILE_ERR_RENAME_PROFILE, from, err))?;
+    }
     if let Some(entry) = profiles_index.profiles.remove(from) {
         profiles_index.profiles.insert(desired.clone(), entry);
     }
@@ -1493,14 +1708,30 @@ pub(crate) fn sync_current(paths: &Paths, index: &mut ProfilesIndex) -> Result<(
         None => return Ok(()),
     };
     let target = profile_path_for_id(&paths.profiles, &id);
+    let managed_files = managed_files_for_profile(&paths.profiles, &id, index.profiles.get(&id));
     sync_profile(paths, &target)?;
+    if managed_files_contains_config(&managed_files) {
+        sync_profile_config(paths, &id)?;
+    }
     let label = label_for_id(&labels_from_index(index), &id);
-    update_profiles_index_entry(index, &id, Some(&tokens), label);
+    update_profiles_index_entry(index, &id, Some(&tokens), label, Some(managed_files));
     Ok(())
 }
 
 fn sync_profile(paths: &Paths, target: &Path) -> Result<(), String> {
-    copy_atomic(&paths.auth, target).map_err(|err| crate::msg1(PROFILE_ERR_SYNC_CURRENT, err))?;
+    sync_file(&paths.auth, target)
+}
+
+fn sync_profile_config(paths: &Paths, id: &str) -> Result<(), String> {
+    if !paths.config.is_file() {
+        return Ok(());
+    }
+    let target = profile_config_path_for_id(&paths.profiles, id);
+    sync_file(&paths.config, &target)
+}
+
+fn sync_file(source: &Path, target: &Path) -> Result<(), String> {
+    copy_atomic(source, target).map_err(|err| crate::msg1(PROFILE_ERR_SYNC_CURRENT, err))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -1991,6 +2222,10 @@ fn render_entries(entries: &[Entry], ctx: &ListCtx, allow_plain_spacing: bool) -
         if ctx.show_current_marker && entry.is_current {
             header.push_str(&current_profile_marker(ctx.use_color));
         }
+        header.push_str(&format_managed_files_suffix(
+            &entry.managed_files,
+            ctx.use_color,
+        ));
         let show_detail_lines = ctx.show_usage || entry.always_show_details;
         if !show_detail_lines {
             if let Some(err) = entry.error_summary.as_deref() {
@@ -2050,9 +2285,9 @@ fn make_error(
     id: Option<String>,
     label: Option<String>,
     index_entry: Option<&ProfileIndexEntry>,
+    managed_files: Vec<String>,
     use_color: bool,
     message: &str,
-    summary_label: &str,
     is_current: bool,
 ) -> Entry {
     let info = profile_info_with_fallback(None, index_entry, label.clone(), is_current, use_color);
@@ -2064,11 +2299,12 @@ fn make_error(
         plan: info.plan.clone(),
         is_api_key: index_entry.map(|entry| entry.is_api_key).unwrap_or(false),
         is_saved,
+        managed_files,
         display: info.display,
         details: vec![format_error(message)],
         warnings: Vec::new(),
         usage: None,
-        error_summary: Some(error_summary(summary_label, message)),
+        error_summary: Some(error_summary(PROFILE_SUMMARY_ERROR, message)),
         always_show_details: false,
         is_current,
     }
@@ -2341,28 +2577,33 @@ fn make_entry(
     is_current: bool,
 ) -> Entry {
     let use_color = ctx.use_color;
-    let label_for_error = label.clone().or_else(|| profile_id_from_path(profile_path));
+    let profile_id = profile_id_from_path(profile_path);
+    let managed_files = profile_id
+        .as_deref()
+        .map(|id| managed_files_for_profile(&ctx.profiles_dir, id, index_entry))
+        .unwrap_or_else(|| managed_files_for_save(false));
+    let label_for_error = label.clone().or_else(|| profile_id.clone());
     let mut tokens = match tokens_result {
         Some(Ok(tokens)) => tokens.clone(),
         Some(Err(err)) => {
             return make_error(
-                profile_id_from_path(profile_path),
+                profile_id,
                 label_for_error,
                 index_entry,
+                managed_files,
                 use_color,
                 err,
-                PROFILE_SUMMARY_ERROR,
                 is_current,
             );
         }
         None => {
             return make_error(
-                profile_id_from_path(profile_path),
+                profile_id,
                 label_for_error,
                 index_entry,
+                managed_files,
                 use_color,
                 PROFILE_SUMMARY_FILE_MISSING,
-                PROFILE_SUMMARY_ERROR,
                 is_current,
             );
         }
@@ -2378,12 +2619,13 @@ fn make_entry(
         profile_path,
     );
     Entry {
-        id: profile_id_from_path(profile_path),
+        id: profile_id,
         label: label_value,
         email: info.email,
         plan: info.plan,
         is_api_key,
         is_saved: true,
+        managed_files,
         display: info.display,
         details,
         warnings: Vec::new(),
@@ -2459,6 +2701,7 @@ fn make_current(
     current_saved_id: Option<&str>,
     labels: &Labels,
     tokens_map: &BTreeMap<String, Result<Tokens, String>>,
+    index: &ProfilesIndex,
     ctx: &ListCtx,
 ) -> Option<Entry> {
     if !paths.auth.is_file() {
@@ -2471,9 +2714,9 @@ fn make_current(
                 None,
                 None,
                 None,
+                active_managed_files(paths),
                 ctx.use_color,
                 &err,
-                PROFILE_SUMMARY_ERROR,
                 true,
             ));
         }
@@ -2484,6 +2727,9 @@ fn make_current(
     });
     let effective_saved_id = current_saved_id.or(resolved_saved_id.as_deref());
     let label = effective_saved_id.and_then(|id| label_for_id(labels, id));
+    let managed_files = effective_saved_id
+        .map(|id| managed_files_for_profile(&ctx.profiles_dir, id, index.profiles.get(id)))
+        .unwrap_or_else(|| active_managed_files(paths));
     let use_color = ctx.use_color;
     let label_value = label.clone();
     let info = profile_info(Some(&tokens), label, true, use_color);
@@ -2528,6 +2774,7 @@ fn make_current(
         plan: info.plan,
         is_api_key,
         is_saved: effective_saved_id.is_some(),
+        managed_files,
         display: info.display,
         details,
         warnings,
@@ -2586,6 +2833,7 @@ struct Entry {
     plan: Option<String>,
     is_api_key: bool,
     is_saved: bool,
+    managed_files: Vec<String>,
     display: String,
     details: Vec<String>,
     warnings: Vec<String>,
@@ -2604,6 +2852,7 @@ struct ListedProfile {
     is_current: bool,
     is_saved: bool,
     is_api_key: bool,
+    managed_files: Vec<String>,
     error: Option<String>,
 }
 
@@ -2621,6 +2870,7 @@ struct StatusProfileJson {
     is_current: bool,
     is_saved: bool,
     is_api_key: bool,
+    managed_files: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     warnings: Vec<String>,
     usage: Option<StatusUsageJson>,
@@ -2659,6 +2909,7 @@ fn print_list_json(entries: &[Entry]) -> Result<(), String> {
             is_current: entry.is_current,
             is_saved: entry.is_saved,
             is_api_key: entry.is_api_key,
+            managed_files: entry.managed_files.clone(),
             error: entry.error_summary.clone(),
         })
         .collect();
@@ -2795,6 +3046,7 @@ fn status_profile_json(entry: Entry) -> StatusProfileJson {
         is_current: entry.is_current,
         is_saved: entry.is_saved,
         is_api_key: entry.is_api_key,
+        managed_files: entry.managed_files,
         warnings: entry
             .warnings
             .into_iter()
@@ -3093,6 +3345,7 @@ mod tests {
                 principal_id: Some("principal-1".to_string()),
                 workspace_or_org_id: Some("workspace-1".to_string()),
                 plan_type_key: Some("team".to_string()),
+                managed_files: managed_files_for_save(true),
             },
         );
         write_profiles_index(&paths, &index).unwrap();
@@ -3106,6 +3359,10 @@ mod tests {
         assert_eq!(entry.principal_id.as_deref(), Some("principal-1"));
         assert_eq!(entry.workspace_or_org_id.as_deref(), Some("workspace-1"));
         assert_eq!(entry.plan_type_key.as_deref(), Some("team"));
+        assert_eq!(
+            entry.managed_files,
+            vec![AUTH_FILE_NAME.to_string(), CONFIG_FILE_NAME.to_string()]
+        );
     }
 
     #[test]
@@ -3283,6 +3540,7 @@ mod tests {
             plan: Some("team".to_string()),
             is_api_key: false,
             is_saved: true,
+            managed_files: managed_files_for_save(false),
             display: "Display".to_string(),
             details: vec!["detail".to_string()],
             warnings: Vec::new(),
@@ -3316,6 +3574,7 @@ mod tests {
             plan: Some("team".to_string()),
             is_api_key: false,
             is_saved: true,
+            managed_files: managed_files_for_save(false),
             display: "\u{1b}[32malpha@example.com\u{1b}[0m".to_string(),
             details: Vec::new(),
             warnings: Vec::new(),
@@ -3339,7 +3598,10 @@ mod tests {
 
         assert!(!lines.is_empty());
         assert!(lines[0].contains("\u{1b}[32m"));
-        assert_eq!(crate::ui::strip_ansi(&lines[0]), "alpha@example.com");
+        assert_eq!(
+            crate::ui::strip_ansi(&lines[0]),
+            "alpha@example.com [files: auth.json]"
+        );
     }
 
     #[test]
@@ -3366,6 +3628,7 @@ mod tests {
                 plan: Some("team".to_string()),
                 is_api_key: false,
                 is_saved: true,
+                managed_files: managed_files_for_save(false),
                 display: "One".to_string(),
                 details: vec!["5 hour: 10% left".to_string()],
                 warnings: Vec::new(),
@@ -3381,6 +3644,7 @@ mod tests {
                 plan: Some("team".to_string()),
                 is_api_key: false,
                 is_saved: true,
+                managed_files: managed_files_for_save(false),
                 display: "Two".to_string(),
                 details: vec!["5 hour: 20% left".to_string()],
                 warnings: Vec::new(),
@@ -3442,7 +3706,7 @@ mod tests {
         fs::create_dir_all(&paths.profiles).unwrap();
         write_auth(&paths.auth, "acct", "a@b.com", "pro", "acc", "ref");
         crate::ensure_paths(&paths).unwrap();
-        save_profile(&paths, Some("team".to_string()), false).unwrap();
+        save_profile(&paths, Some("team".to_string()), false, false).unwrap();
         list_profiles(&paths, false, false).unwrap();
         status_profiles(&paths, false, None, None, false).unwrap();
         status_profiles(&paths, true, None, None, false).unwrap();
@@ -3455,7 +3719,7 @@ mod tests {
         fs::create_dir_all(&paths.profiles).unwrap();
         write_auth(&paths.auth, "acct", "a@b.com", "pro", "acc", "ref");
         crate::ensure_paths(&paths).unwrap();
-        save_profile(&paths, Some("team".to_string()), false).unwrap();
+        save_profile(&paths, Some("team".to_string()), false, false).unwrap();
         delete_profile(&paths, true, Some("team".to_string()), vec![], false).unwrap();
     }
 
@@ -3475,8 +3739,8 @@ mod tests {
         );
         crate::ensure_paths(&paths).unwrap();
 
-        save_profile(&paths, None, false).unwrap();
-        save_profile(&paths, None, false).unwrap();
+        save_profile(&paths, None, false, false).unwrap();
+        save_profile(&paths, None, false, false).unwrap();
 
         let ids = collect_profile_ids(&paths.profiles).unwrap();
         assert_eq!(ids.len(), 1);
@@ -3499,7 +3763,7 @@ mod tests {
             "acc",
             "ref",
         );
-        save_profile(&paths, None, false).unwrap();
+        save_profile(&paths, None, false, false).unwrap();
 
         write_auth_with_user(
             &paths.auth,
@@ -3510,7 +3774,7 @@ mod tests {
             "acc",
             "ref",
         );
-        save_profile(&paths, None, false).unwrap();
+        save_profile(&paths, None, false, false).unwrap();
 
         let ids = collect_profile_ids(&paths.profiles).unwrap();
         assert_eq!(ids.len(), 2);
@@ -3534,7 +3798,7 @@ mod tests {
             "acc",
             "ref",
         );
-        save_profile(&paths, None, false).unwrap();
+        save_profile(&paths, None, false, false).unwrap();
 
         write_auth_with_user(
             &paths.auth,
@@ -3545,7 +3809,7 @@ mod tests {
             "acc",
             "ref",
         );
-        save_profile(&paths, None, false).unwrap();
+        save_profile(&paths, None, false, false).unwrap();
 
         let ids = collect_profile_ids(&paths.profiles).unwrap();
         assert_eq!(ids.len(), 2);
