@@ -1,4 +1,4 @@
-use crate::{Paths, is_plain, set_plain};
+use crate::{Paths, default_profiles_dir, is_plain, set_plain};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use std::cell::Cell;
@@ -137,7 +137,7 @@ pub(crate) fn make_paths(root: &Path) -> Paths {
     let codex = root.to_path_buf();
     let auth = codex.join("auth.json");
     let config = codex.join("config.toml");
-    let profiles = codex.join("profiles");
+    let profiles = default_profiles_dir(&codex);
     let profiles_index = profiles.join("profiles.json");
     let update_cache = profiles.join("update.json");
     let profiles_lock = profiles.join("profiles.lock");

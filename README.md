@@ -83,7 +83,8 @@ The npm package also installs `codexswitch` and `codex-profiles` command aliases
 ## Usage
 
 > [!NOTE]
-> CodexSwitch CLI data is stored under `~/.codex/profiles/` on your machine
+> CodexSwitch CLI data is stored under `~/.codex/codexswitch/profiles/` on your machine.
+> Each saved profile is kept in its own snowflake-id folder.
 
 ### Command Reference
 
@@ -146,6 +147,7 @@ The npm package also installs `codexswitch` and `codex-profiles` command aliases
 
 - `load` and `delete` are interactive unless you pass `--label` or `--id`
 - Profiles are auth-only by default: saving without `--include-config` stores and restores only `auth.json`
+- Saved profiles use `~/.codex/codexswitch/profiles/<profile-id>/auth.json`, with optional `config.toml` in the same folder
 - Use `save --include-config` for third-party or custom-provider profiles that also need `~/.codex/config.toml`
 - `list`, `status`, and JSON output show `managed_files`, for example `auth.json` or `auth.json + config.toml`
 - Export bundles contain secrets

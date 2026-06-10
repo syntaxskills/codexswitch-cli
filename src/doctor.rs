@@ -501,11 +501,26 @@ fn repair_storage_permissions(paths: &Paths) -> Result<Vec<String>, String> {
         ));
     }
 
+    let mut repaired_profile_dirs = 0usize;
     let mut repaired_profiles = 0usize;
     for path in profile_files(&paths.profiles)? {
+        if let Some(dir) = path.parent()
+            && set_mode_if_needed(dir, 0o700)?
+        {
+            repaired_profile_dirs += 1;
+        }
         if set_mode_if_needed(&path, 0o600)? {
             repaired_profiles += 1;
         }
+        let config_path = path.with_file_name("config.toml");
+        if config_path.exists() && set_mode_if_needed(&config_path, 0o600)? {
+            repaired_profiles += 1;
+        }
+    }
+    if repaired_profile_dirs > 0 {
+        repairs.push(format!(
+            "Repaired saved profile directory permissions ({repaired_profile_dirs})"
+        ));
     }
     if repaired_profiles > 0 {
         repairs.push(format!(

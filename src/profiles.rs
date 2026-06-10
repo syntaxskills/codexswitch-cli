@@ -10,25 +10,27 @@ use std::fs;
 use std::io::{self, IsTerminal as _};
 use std::path::Component;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::json_response::CommandResultJson;
 use crate::{
     AUTH_ERR_INCOMPLETE_ACCOUNT, AUTH_ERR_PROFILE_MISSING_EMAIL_PLAN, PROFILE_COPY_CONTEXT_LOAD,
     PROFILE_COPY_CONTEXT_SAVE, PROFILE_DELETE_HELP, PROFILE_ERR_COPY_CONTEXT,
     PROFILE_ERR_CURRENT_NOT_SAVED, PROFILE_ERR_DELETE_CONFIRM_REQUIRED, PROFILE_ERR_FAILED_DELETE,
-    PROFILE_ERR_ID_NO_MATCH, PROFILE_ERR_ID_NOT_FOUND, PROFILE_ERR_INDEX_INVALID_JSON,
-    PROFILE_ERR_LABEL_EMPTY, PROFILE_ERR_LABEL_EXISTS, PROFILE_ERR_LABEL_NO_MATCH,
-    PROFILE_ERR_LABEL_NOT_FOUND, PROFILE_ERR_PROMPT_CONTEXT, PROFILE_ERR_PROMPT_DELETE,
-    PROFILE_ERR_PROMPT_LOAD, PROFILE_ERR_READ_INDEX, PROFILE_ERR_READ_PROFILES_DIR,
-    PROFILE_ERR_RENAME_PROFILE, PROFILE_ERR_SELECTED_INVALID, PROFILE_ERR_SERIALIZE_INDEX,
-    PROFILE_ERR_SYNC_CURRENT, PROFILE_ERR_TTY_REQUIRED, PROFILE_ERR_WRITE_INDEX, PROFILE_LOAD_HELP,
-    PROFILE_MSG_DELETED_COUNT, PROFILE_MSG_DELETED_WITH, PROFILE_MSG_LABEL_CLEARED,
-    PROFILE_MSG_LABEL_SET, PROFILE_MSG_LOADED_WITH, PROFILE_MSG_NOT_FOUND, PROFILE_MSG_SAVED,
-    PROFILE_MSG_SAVED_WITH, PROFILE_PROMPT_CANCEL, PROFILE_PROMPT_CONTINUE_WITHOUT_SAVING,
-    PROFILE_PROMPT_DELETE_MANY, PROFILE_PROMPT_DELETE_ONE, PROFILE_PROMPT_DELETE_SELECTED,
-    PROFILE_PROMPT_SAVE_AND_CONTINUE, PROFILE_SUMMARY_AUTH_ERROR, PROFILE_SUMMARY_ERROR,
-    PROFILE_SUMMARY_FILE_MISSING, PROFILE_SUMMARY_USAGE_ERROR, PROFILE_UNSAVED_NO_MATCH,
-    PROFILE_WARN_CURRENT_NOT_SAVED_REASON, UI_ERROR_PREFIX, UI_ERROR_TWO_LINE,
+    PROFILE_ERR_ID_NO_MATCH, PROFILE_ERR_INDEX_INVALID_JSON, PROFILE_ERR_LABEL_EMPTY,
+    PROFILE_ERR_LABEL_EXISTS, PROFILE_ERR_LABEL_NO_MATCH, PROFILE_ERR_LABEL_NOT_FOUND,
+    PROFILE_ERR_PROMPT_CONTEXT, PROFILE_ERR_PROMPT_DELETE, PROFILE_ERR_PROMPT_LOAD,
+    PROFILE_ERR_READ_INDEX, PROFILE_ERR_READ_PROFILES_DIR, PROFILE_ERR_SELECTED_INVALID,
+    PROFILE_ERR_SERIALIZE_INDEX, PROFILE_ERR_SYNC_CURRENT, PROFILE_ERR_TTY_REQUIRED,
+    PROFILE_ERR_WRITE_INDEX, PROFILE_LOAD_HELP, PROFILE_MSG_DELETED_COUNT,
+    PROFILE_MSG_DELETED_WITH, PROFILE_MSG_LABEL_CLEARED, PROFILE_MSG_LABEL_SET,
+    PROFILE_MSG_LOADED_WITH, PROFILE_MSG_NOT_FOUND, PROFILE_MSG_SAVED, PROFILE_MSG_SAVED_WITH,
+    PROFILE_PROMPT_CANCEL, PROFILE_PROMPT_CONTINUE_WITHOUT_SAVING, PROFILE_PROMPT_DELETE_MANY,
+    PROFILE_PROMPT_DELETE_ONE, PROFILE_PROMPT_DELETE_SELECTED, PROFILE_PROMPT_SAVE_AND_CONTINUE,
+    PROFILE_SUMMARY_AUTH_ERROR, PROFILE_SUMMARY_ERROR, PROFILE_SUMMARY_FILE_MISSING,
+    PROFILE_SUMMARY_USAGE_ERROR, PROFILE_UNSAVED_NO_MATCH, PROFILE_WARN_CURRENT_NOT_SAVED_REASON,
+    UI_ERROR_PREFIX, UI_ERROR_TWO_LINE,
 };
 use crate::{
     AuthFile, ProfileIdentityKey, Tokens, extract_email_and_plan, extract_profile_identity,
@@ -53,6 +55,12 @@ const USAGE_CONCURRENCY_ENV: &str = "CODEXSWITCH_CLI_USAGE_CONCURRENCY";
 const LEGACY_USAGE_CONCURRENCY_ENV: &str = "CODEX_PROFILES_USAGE_CONCURRENCY";
 const AUTH_FILE_NAME: &str = "auth.json";
 const CONFIG_FILE_NAME: &str = "config.toml";
+const SNOWFLAKE_EPOCH_MS: u64 = 1_704_067_200_000;
+const SNOWFLAKE_SEQUENCE_BITS: u64 = 12;
+const SNOWFLAKE_SEQUENCE_MASK: u64 = (1 << SNOWFLAKE_SEQUENCE_BITS) - 1;
+const SNOWFLAKE_NODE_MASK: u64 = (1 << 10) - 1;
+
+static LAST_SNOWFLAKE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Serialize, Deserialize)]
 struct ExportBundle {
@@ -107,6 +115,7 @@ pub fn save_profile(
     if !include_config {
         remove_profile_config_if_present(&config_target)?;
     }
+    ensure_profile_dir(&paths.profiles, &id)?;
     copy_profile(&paths.auth, &target, PROFILE_COPY_CONTEXT_SAVE)?;
     if include_config {
         copy_profile(&paths.config, &config_target, PROFILE_COPY_CONTEXT_SAVE)?;
@@ -375,12 +384,16 @@ pub fn import_profiles(paths: &Paths, input: PathBuf, json: bool) -> Result<(), 
 
     let mut written_ids = Vec::with_capacity(prepared.len());
     for profile in &prepared {
+        if let Err(err) = ensure_profile_dir(&paths.profiles, &profile.id) {
+            cleanup_imported_profiles(paths, &written_ids);
+            return Err(err);
+        }
+        written_ids.push(profile.id.clone());
         let path = profile_path_for_id(&paths.profiles, &profile.id);
         if let Err(err) = crate::common::write_atomic_private(&path, &profile.contents) {
             cleanup_imported_profiles(paths, &written_ids);
             return Err(err);
         }
-        written_ids.push(profile.id.clone());
         if let Some(config_toml) = profile.config_toml.as_deref() {
             let config_path = profile_config_path_for_id(&paths.profiles, &profile.id);
             if let Err(err) = crate::common::write_atomic_private(&config_path, config_toml) {
@@ -607,6 +620,8 @@ pub fn delete_profile(
         }
         fs::remove_file(&target).map_err(|err| crate::msg1(PROFILE_ERR_FAILED_DELETE, err))?;
         remove_profile_config_if_present(&profile_config_path_for_id(&paths.profiles, selected))
+            .map_err(|err| crate::msg1(PROFILE_ERR_FAILED_DELETE, err))?;
+        remove_profile_dir_if_empty(&paths.profiles, selected)
             .map_err(|err| crate::msg1(PROFILE_ERR_FAILED_DELETE, err))?;
         remove_labels_for_id(&mut store.labels, selected);
         store.profiles_index.profiles.remove(selected);
@@ -1207,27 +1222,72 @@ pub fn profile_files(profiles_dir: &Path) -> Result<Vec<PathBuf>, String> {
     for entry in entries {
         let entry = entry.map_err(|err| crate::msg1(PROFILE_ERR_READ_PROFILES_DIR, err))?;
         let path = entry.path();
-        if !is_profile_file(&path) {
-            continue;
+        if path.is_dir() {
+            let auth_path = path.join(AUTH_FILE_NAME);
+            if auth_path.is_file() {
+                files.push(auth_path);
+            }
         }
-        files.push(path);
     }
     Ok(files)
 }
 
 pub fn profile_id_from_path(path: &Path) -> Option<String> {
+    if path.file_name().and_then(|value| value.to_str()) == Some(AUTH_FILE_NAME) {
+        return path
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .and_then(|value| value.to_str())
+            .filter(|stem| !stem.is_empty())
+            .map(|stem| stem.to_string());
+    }
     path.file_stem()
         .and_then(|value| value.to_str())
         .filter(|stem| !stem.is_empty())
         .map(|stem| stem.to_string())
 }
 
+pub fn profile_dir_for_id(profiles_dir: &Path, id: &str) -> PathBuf {
+    profiles_dir.join(id)
+}
+
 pub fn profile_path_for_id(profiles_dir: &Path, id: &str) -> PathBuf {
-    profiles_dir.join(format!("{id}.json"))
+    profile_dir_for_id(profiles_dir, id).join(AUTH_FILE_NAME)
 }
 
 pub fn profile_config_path_for_id(profiles_dir: &Path, id: &str) -> PathBuf {
-    profiles_dir.join(format!("{id}.config.toml"))
+    profile_dir_for_id(profiles_dir, id).join(CONFIG_FILE_NAME)
+}
+
+fn ensure_profile_dir(profiles_dir: &Path, id: &str) -> Result<(), String> {
+    let dir = profile_dir_for_id(profiles_dir, id);
+    fs::create_dir_all(&dir).map_err(|err| {
+        format!(
+            "Error: Cannot create profile directory {}: {err}",
+            dir.display()
+        )
+    })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).map_err(|err| {
+            format!(
+                "Error: Cannot set permissions on profile directory {}: {err}",
+                dir.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn remove_profile_dir_if_empty(profiles_dir: &Path, id: &str) -> Result<(), String> {
+    let dir = profile_dir_for_id(profiles_dir, id);
+    match fs::remove_dir(&dir) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::DirectoryNotEmpty => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
 }
 
 fn managed_files_for_save(include_config: bool) -> Vec<String> {
@@ -1436,6 +1496,7 @@ fn cleanup_imported_profiles(paths: &Paths, ids: &[String]) {
     for id in ids {
         let _ = fs::remove_file(profile_path_for_id(&paths.profiles, id));
         let _ = fs::remove_file(profile_config_path_for_id(&paths.profiles, id));
+        let _ = remove_profile_dir_if_empty(&paths.profiles, id);
     }
 }
 
@@ -1476,45 +1537,32 @@ pub fn load_profile_tokens_map(
 
 pub(crate) fn resolve_save_id(
     paths: &Paths,
-    profiles_index: &mut ProfilesIndex,
+    _profiles_index: &mut ProfilesIndex,
     tokens: &Tokens,
 ) -> Result<String, String> {
-    let (_, email, plan) = require_identity(tokens)?;
+    let _ = require_identity(tokens)?;
     let identity =
         extract_profile_identity(tokens).ok_or_else(|| AUTH_ERR_INCOMPLETE_ACCOUNT.to_string())?;
-    let (desired_base, desired, candidates) = desired_candidates(paths, &identity, &email, &plan)?;
-    if let Some(primary) = pick_primary(&candidates).filter(|primary| primary != &desired) {
-        return rename_profile_id(paths, profiles_index, &primary, &desired_base, &identity);
+    let candidates = scan_profile_ids(&paths.profiles, &identity)?;
+    if let Some(primary) = pick_primary(&candidates) {
+        return Ok(primary);
     }
-    Ok(desired)
+    Ok(next_snowflake_profile_id(&paths.profiles))
 }
 
 pub(crate) fn resolve_sync_id(
     paths: &Paths,
-    profiles_index: &mut ProfilesIndex,
+    _profiles_index: &mut ProfilesIndex,
     tokens: &Tokens,
 ) -> Result<Option<String>, String> {
-    let Ok((_, email, plan)) = require_identity(tokens) else {
+    if require_identity(tokens).is_err() {
         return Ok(None);
     };
     let Some(identity) = extract_profile_identity(tokens) else {
         return Ok(None);
     };
-    let (desired_base, desired, candidates) = desired_candidates(paths, &identity, &email, &plan)?;
-    if candidates.len() == 1 {
-        return Ok(candidates.first().cloned());
-    }
-    if candidates.iter().any(|id| id == &desired) {
-        return Ok(Some(desired));
-    }
-    let Some(primary) = pick_primary(&candidates) else {
-        return Ok(None);
-    };
-    if primary != desired {
-        let renamed = rename_profile_id(paths, profiles_index, &primary, &desired_base, &identity)?;
-        return Ok(Some(renamed));
-    }
-    Ok(Some(primary))
+    let candidates = scan_profile_ids(&paths.profiles, &identity)?;
+    Ok(pick_primary(&candidates))
 }
 
 pub(crate) fn cached_profile_ids(
@@ -1535,108 +1583,6 @@ pub(crate) fn cached_profile_ids(
 
 pub(crate) fn pick_primary(candidates: &[String]) -> Option<String> {
     candidates.iter().min().cloned()
-}
-
-fn desired_candidates(
-    paths: &Paths,
-    identity: &ProfileIdentityKey,
-    email: &str,
-    plan: &str,
-) -> Result<(String, String, Vec<String>), String> {
-    let (desired_base, desired) = desired_id(paths, identity, email, plan);
-    let candidates = scan_profile_ids(&paths.profiles, identity)?;
-    Ok((desired_base, desired, candidates))
-}
-
-fn desired_id(
-    paths: &Paths,
-    identity: &ProfileIdentityKey,
-    email: &str,
-    plan: &str,
-) -> (String, String) {
-    let desired_base = profile_base(email, plan);
-    let desired = unique_id(&desired_base, identity, &paths.profiles);
-    (desired_base, desired)
-}
-
-fn profile_base(email: &str, plan_label: &str) -> String {
-    let email = sanitize_part(email);
-    let plan = sanitize_part(plan_label);
-    let email = if email.is_empty() {
-        "unknown".to_string()
-    } else {
-        email
-    };
-    let plan = if plan.is_empty() {
-        "unknown".to_string()
-    } else {
-        plan
-    };
-    format!("{email}-{plan}")
-}
-
-fn sanitize_part(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    let mut last_dash = false;
-    for ch in value.chars() {
-        let next = if ch.is_ascii_alphanumeric() {
-            Some(ch.to_ascii_lowercase())
-        } else if matches!(ch, '@' | '.' | '-' | '_' | '+') {
-            Some(ch)
-        } else {
-            Some('-')
-        };
-        if let Some(next) = next {
-            if next == '-' {
-                if last_dash {
-                    continue;
-                }
-                last_dash = true;
-            } else {
-                last_dash = false;
-            }
-            out.push(next);
-        }
-    }
-    out.trim_matches('-').to_string()
-}
-
-fn unique_id(base: &str, identity: &ProfileIdentityKey, profiles_dir: &Path) -> String {
-    let mut candidate = base.to_string();
-    let suffix = short_identity_suffix(identity);
-    let mut attempts = 0usize;
-    loop {
-        let path = profile_path_for_id(profiles_dir, &candidate);
-        if !path.is_file() {
-            return candidate;
-        }
-        if read_tokens(&path)
-            .ok()
-            .is_some_and(|tokens| matches_identity(&tokens, identity))
-        {
-            return candidate;
-        }
-        attempts += 1;
-        if attempts == 1 {
-            candidate = format!("{base}-{suffix}");
-        } else {
-            candidate = format!("{base}-{suffix}-{attempts}");
-        }
-    }
-}
-
-fn short_identity_suffix(identity: &ProfileIdentityKey) -> String {
-    let source = if identity.workspace_or_org_id == "unknown" {
-        identity.principal_id.as_str()
-    } else {
-        identity.workspace_or_org_id.as_str()
-    };
-    let suffix: String = source.chars().take(6).collect();
-    if suffix.is_empty() {
-        "id".to_string()
-    } else {
-        suffix
-    }
 }
 
 fn scan_profile_ids(
@@ -1662,35 +1608,45 @@ fn matches_identity(tokens: &Tokens, identity: &ProfileIdentityKey) -> bool {
     extract_profile_identity(tokens).is_some_and(|candidate| candidate == *identity)
 }
 
-fn rename_profile_id(
-    paths: &Paths,
-    profiles_index: &mut ProfilesIndex,
-    from: &str,
-    target_base: &str,
-    identity: &ProfileIdentityKey,
-) -> Result<String, String> {
-    let desired = unique_id(target_base, identity, &paths.profiles);
-    if from == desired {
-        return Ok(desired);
+fn next_snowflake_profile_id(profiles_dir: &Path) -> String {
+    loop {
+        let id = generate_snowflake_id().to_string();
+        if !profile_dir_for_id(profiles_dir, &id).exists() {
+            return id;
+        }
     }
-    let from_path = profile_path_for_id(&paths.profiles, from);
-    let to_path = profile_path_for_id(&paths.profiles, &desired);
-    let from_config_path = profile_config_path_for_id(&paths.profiles, from);
-    let to_config_path = profile_config_path_for_id(&paths.profiles, &desired);
-    if !from_path.is_file() {
-        return Err(crate::msg1(PROFILE_ERR_ID_NOT_FOUND, from));
+}
+
+fn generate_snowflake_id() -> u64 {
+    loop {
+        let now_ms = current_snowflake_millis();
+        let previous = LAST_SNOWFLAKE.load(Ordering::Relaxed);
+        let previous_ms = previous >> SNOWFLAKE_SEQUENCE_BITS;
+        let previous_sequence = previous & SNOWFLAKE_SEQUENCE_MASK;
+        let (millis, sequence) = if now_ms > previous_ms {
+            (now_ms, 0)
+        } else if previous_sequence < SNOWFLAKE_SEQUENCE_MASK {
+            (previous_ms, previous_sequence + 1)
+        } else {
+            (previous_ms + 1, 0)
+        };
+        let next = (millis << SNOWFLAKE_SEQUENCE_BITS) | sequence;
+        if LAST_SNOWFLAKE
+            .compare_exchange(previous, next, Ordering::AcqRel, Ordering::Relaxed)
+            .is_ok()
+        {
+            let node = u64::from(std::process::id()) & SNOWFLAKE_NODE_MASK;
+            return (millis << 22) | (node << SNOWFLAKE_SEQUENCE_BITS) | sequence;
+        }
     }
-    fs::rename(&from_path, &to_path)
-        .map_err(|err| crate::msg2(PROFILE_ERR_RENAME_PROFILE, from, err))?;
-    if from_config_path.is_file() {
-        remove_profile_config_if_present(&to_config_path)?;
-        fs::rename(&from_config_path, &to_config_path)
-            .map_err(|err| crate::msg2(PROFILE_ERR_RENAME_PROFILE, from, err))?;
-    }
-    if let Some(entry) = profiles_index.profiles.remove(from) {
-        profiles_index.profiles.insert(desired.clone(), entry);
-    }
-    Ok(desired)
+}
+
+fn current_snowflake_millis() -> u64 {
+    let unix_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0);
+    unix_ms.saturating_sub(SNOWFLAKE_EPOCH_MS)
 }
 
 pub(crate) struct Snapshot {
@@ -1709,6 +1665,7 @@ pub(crate) fn sync_current(paths: &Paths, index: &mut ProfilesIndex) -> Result<(
     };
     let target = profile_path_for_id(&paths.profiles, &id);
     let managed_files = managed_files_for_profile(&paths.profiles, &id, index.profiles.get(&id));
+    ensure_profile_dir(&paths.profiles, &id)?;
     sync_profile(paths, &target)?;
     if managed_files_contains_config(&managed_files) {
         sync_profile_config(paths, &id)?;
@@ -1726,6 +1683,7 @@ fn sync_profile_config(paths: &Paths, id: &str) -> Result<(), String> {
     if !paths.config.is_file() {
         return Ok(());
     }
+    ensure_profile_dir(&paths.profiles, id)?;
     let target = profile_config_path_for_id(&paths.profiles, id);
     sync_file(&paths.config, &target)
 }
@@ -2643,7 +2601,7 @@ fn make_saved(
     current_saved_id: Option<&str>,
     ctx: &ListCtx,
 ) -> Entry {
-    let profile_path = ctx.profiles_dir.join(format!("{id}.json"));
+    let profile_path = profile_path_for_id(&ctx.profiles_dir, id);
     let label = labels_by_id.get(id).cloned();
     let is_current = current_saved_id == Some(id);
     make_entry(
@@ -3094,19 +3052,6 @@ fn trim_label(label: &str) -> Result<&str, String> {
     Ok(trimmed)
 }
 
-fn is_profile_file(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
-        return false;
-    };
-    if ext != "json" {
-        return false;
-    }
-    !matches!(
-        path.file_name().and_then(|name| name.to_str()),
-        Some("profiles.json" | "update.json")
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3147,7 +3092,19 @@ mod tests {
             }
         });
         let path = profile_path_for_id(&paths.profiles, id);
+        fs::create_dir_all(path.parent().expect("profile parent")).unwrap();
         fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
+    }
+
+    fn write_raw_profile(paths: &Paths, id: &str, contents: &str) -> PathBuf {
+        let path = profile_path_for_id(&paths.profiles, id);
+        fs::create_dir_all(path.parent().expect("profile parent")).unwrap();
+        fs::write(&path, contents).unwrap();
+        path
+    }
+
+    fn is_snowflake_id(id: &str) -> bool {
+        id.len() >= 10 && id.bytes().all(|byte| byte.is_ascii_digit())
     }
 
     fn build_id_token_with_user(email: &str, plan: &str, user_id: &str) -> String {
@@ -3187,14 +3144,6 @@ mod tests {
             }
         });
         fs::write(path, serde_json::to_string(&value).unwrap()).unwrap();
-    }
-
-    fn make_identity(principal: &str, workspace: &str, plan: &str) -> ProfileIdentityKey {
-        ProfileIdentityKey {
-            principal_id: principal.to_string(),
-            workspace_or_org_id: workspace.to_string(),
-            plan_type: plan.to_string(),
-        }
     }
 
     fn make_tokens(account_id: &str, email: &str, plan: &str) -> Tokens {
@@ -3401,33 +3350,15 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_helpers() {
-        assert_eq!(sanitize_part("A B"), "a-b");
-        assert_eq!(profile_base("", ""), "unknown-unknown");
-        let identity = make_identity("principal", "workspace123", "team");
-        assert_eq!(short_identity_suffix(&identity), "worksp");
-        let unknown_workspace = make_identity("principal123", "unknown", "team");
-        assert_eq!(short_identity_suffix(&unknown_workspace), "princi");
-    }
-
-    #[test]
-    fn unique_id_conflicts() {
+    fn snowflake_profile_ids_are_numeric_and_unique() {
         let dir = tempfile::tempdir().expect("tempdir");
         let paths = make_paths(dir.path());
         fs::create_dir_all(&paths.profiles).unwrap();
-        write_profile(&paths, "base", "acct", "a@b.com", "pro");
-        let id = unique_id(
-            "base",
-            &make_identity("acct", "acct", "pro"),
-            &paths.profiles,
-        );
-        assert_eq!(id, "base");
-        let id = unique_id(
-            "base",
-            &make_identity("other", "other", "pro"),
-            &paths.profiles,
-        );
-        assert!(id.starts_with("base-"));
+        let first = next_snowflake_profile_id(&paths.profiles);
+        let second = next_snowflake_profile_id(&paths.profiles);
+        assert_ne!(first, second);
+        assert!(is_snowflake_id(&first));
+        assert!(is_snowflake_id(&second));
     }
 
     #[test]
@@ -3435,9 +3366,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let paths = make_paths(dir.path());
         fs::create_dir_all(&paths.profiles).unwrap();
-        let bad_path = paths.profiles.join("bad.json");
         write_profile(&paths, "valid", "acct", "a@b.com", "pro");
-        fs::write(&bad_path, "not-json").unwrap();
+        let bad_path = write_raw_profile(&paths, "bad", "not-json");
         let index = serde_json::json!({
             "version": 1,
             "active_profile_id": null,
@@ -3486,17 +3416,12 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn load_profile_tokens_map_remove_error() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().expect("tempdir");
         let paths = make_paths(dir.path());
         fs::create_dir_all(&paths.profiles).unwrap();
-        let bad_path = paths.profiles.join("bad.json");
-        fs::write(&bad_path, "not-json").unwrap();
-        let perms = fs::Permissions::from_mode(0o400);
-        fs::set_permissions(&paths.profiles, perms).unwrap();
+        let bad_path = write_raw_profile(&paths, "bad", "not-json");
         let map = load_profile_tokens_map(&paths).unwrap();
         assert!(map.contains_key("bad"));
-        fs::set_permissions(&paths.profiles, fs::Permissions::from_mode(0o700)).unwrap();
         assert!(bad_path.is_file());
     }
 
@@ -3506,29 +3431,12 @@ mod tests {
         let paths = make_paths(dir.path());
         fs::create_dir_all(&paths.profiles).unwrap();
         write_profile(&paths, "one", "acct", "a@b.com", "pro");
-        let tokens = read_tokens(&paths.profiles.join("one.json")).unwrap();
+        let tokens = read_tokens(&profile_path_for_id(&paths.profiles, "one")).unwrap();
         let mut index = ProfilesIndex::default();
         let id = resolve_save_id(&paths, &mut index, &tokens).unwrap();
-        assert!(!id.is_empty());
+        assert_eq!(id, "one");
         let id = resolve_sync_id(&paths, &mut index, &tokens).unwrap();
-        assert!(id.is_some());
-    }
-
-    #[test]
-    fn rename_profile_id_errors_when_missing() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let paths = make_paths(dir.path());
-        fs::create_dir_all(&paths.profiles).unwrap();
-        let mut index = ProfilesIndex::default();
-        let err = rename_profile_id(
-            &paths,
-            &mut index,
-            "missing",
-            "base",
-            &make_identity("acct", "acct", "pro"),
-        )
-        .unwrap_err();
-        assert!(err.contains("not found"));
+        assert_eq!(id.as_deref(), Some("one"));
     }
 
     #[test]
@@ -3744,7 +3652,7 @@ mod tests {
 
         let ids = collect_profile_ids(&paths.profiles).unwrap();
         assert_eq!(ids.len(), 1);
-        assert!(ids.contains("same@example.com-pro"));
+        assert!(ids.iter().all(|id| is_snowflake_id(id)));
     }
 
     #[test]
@@ -3778,8 +3686,7 @@ mod tests {
 
         let ids = collect_profile_ids(&paths.profiles).unwrap();
         assert_eq!(ids.len(), 2);
-        assert!(ids.contains("same@example.com-pro"));
-        assert!(ids.contains("same@example.com-team"));
+        assert!(ids.iter().all(|id| is_snowflake_id(id)));
     }
 
     #[test]
@@ -3813,10 +3720,6 @@ mod tests {
 
         let ids = collect_profile_ids(&paths.profiles).unwrap();
         assert_eq!(ids.len(), 2);
-        assert!(ids.contains("same@example.com-pro"));
-        assert!(
-            ids.iter()
-                .any(|id| id.starts_with("same@example.com-pro-acct"))
-        );
+        assert!(ids.iter().all(|id| is_snowflake_id(id)));
     }
 }

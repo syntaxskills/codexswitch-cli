@@ -67,7 +67,6 @@ pub const PROFILE_ERR_WRITE_INDEX: &str = "Error: Failed to write profiles index
 pub const PROFILE_ERR_LABEL_EXISTS: &str = "Error: Label '{}' already exists. {}";
 pub const PROFILE_ERR_LABEL_NOT_FOUND: &str = "Error: Label '{}' was not found. {}";
 pub const PROFILE_ERR_READ_PROFILES_DIR: &str = "Error: Cannot read profiles directory: {}";
-pub const PROFILE_ERR_RENAME_PROFILE: &str = "Error: Failed to rename profile {}: {}";
 pub const PROFILE_ERR_SYNC_CURRENT: &str = "Error: Failed to sync active profile: {}";
 pub const PROFILE_ERR_COPY_CONTEXT: &str = "Error: Failed to {} {}: {}";
 pub const PROFILE_COPY_CONTEXT_SAVE: &str = "save profile to";
@@ -86,7 +85,6 @@ pub const PROFILE_ERR_PROMPT_DELETE: &str = "Error: Could not prompt for delete:
 pub const PROFILE_ERR_PROMPT_CONTEXT: &str = "Error: Could not prompt for {}: {}";
 pub const PROFILE_ERR_LABEL_EMPTY: &str = "Error: Label cannot be empty.";
 pub const PROFILE_MSG_NOT_FOUND: &str = "Selected profile not found. {}";
-pub const PROFILE_ERR_ID_NOT_FOUND: &str = "Error: Profile {} not found";
 pub const PROFILE_UNSAVED_NO_MATCH: &str = "no saved profile matches auth.json";
 
 pub const PROFILE_SUMMARY_ERROR: &str = "Error";

@@ -6,7 +6,10 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration as StdDuration;
 
-use crate::{Paths, lock_usage, read_profiles_index, write_atomic, write_profiles_index};
+use crate::{
+    Paths, default_profiles_dir, lock_usage, read_profiles_index, write_atomic,
+    write_profiles_index,
+};
 use crate::{
     UPDATE_ERR_PERSIST_DISMISSAL, UPDATE_ERR_READ_CHOICE, UPDATE_ERR_REFRESH_VERSION,
     UPDATE_ERR_SHOW_PROMPT, UPDATE_NON_TTY_RUN, UPDATE_OPTION_NOW, UPDATE_OPTION_SKIP,
@@ -498,7 +501,7 @@ fn updates_disabled_with_debug(config: &UpdateConfig, is_debug: bool) -> bool {
 }
 
 fn paths_for_update(codex_home: PathBuf) -> Paths {
-    let profiles = codex_home.join("profiles");
+    let profiles = default_profiles_dir(&codex_home);
     Paths {
         auth: codex_home.join("auth.json"),
         config: codex_home.join("config.toml"),

@@ -105,7 +105,7 @@ pub fn resolve_paths() -> Result<Paths, String> {
     let codex_dir = home_dir.join(".codex");
     let auth = codex_dir.join("auth.json");
     let config = codex_dir.join("config.toml");
-    let profiles = codex_dir.join("profiles");
+    let profiles = resolve_profiles_dir(&codex_dir);
     let profiles_index = profiles.join("profiles.json");
     let update_cache = profiles.join("update.json");
     let profiles_lock = profiles.join("profiles.lock");
@@ -118,6 +118,17 @@ pub fn resolve_paths() -> Result<Paths, String> {
         update_cache,
         profiles_lock,
     })
+}
+
+pub fn default_profiles_dir(codex_dir: &Path) -> PathBuf {
+    codex_dir.join("codexswitch").join("profiles")
+}
+
+fn resolve_profiles_dir(codex_dir: &Path) -> PathBuf {
+    env::var_os("CODEXSWITCH_CLI_PROFILES_DIR")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| default_profiles_dir(codex_dir))
 }
 
 fn resolve_home_dir() -> Option<PathBuf> {
@@ -968,9 +979,9 @@ mod tests {
     #[test]
     fn ensure_paths_errors_when_profiles_is_file() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let profiles = dir.path().join("profiles");
-        fs::write(&profiles, "not a dir").expect("write");
         let paths = make_paths(dir.path());
+        fs::create_dir_all(paths.profiles.parent().expect("profiles parent")).expect("mkdir");
+        fs::write(&paths.profiles, "not a dir").expect("write");
         let err = ensure_paths(&paths).unwrap_err();
         assert!(err.contains("not a directory"));
     }

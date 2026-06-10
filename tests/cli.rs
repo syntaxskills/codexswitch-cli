@@ -64,7 +64,7 @@ impl TestEnv {
     }
 
     fn profiles_dir(&self) -> PathBuf {
-        self.codex_dir().join("profiles")
+        self.codex_dir().join("codexswitch").join("profiles")
     }
 
     fn write_config(&self, base_url: &str) {
@@ -139,6 +139,12 @@ impl TestEnv {
         active_id: Option<&str>,
     ) {
         fs::create_dir_all(self.profiles_dir()).expect("create profiles dir");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(self.profiles_dir(), fs::Permissions::from_mode(0o700))
+                .expect("chmod profiles dir");
+        }
         let mut profiles = serde_json::Map::new();
         let label_map: std::collections::HashMap<_, _> = labels.iter().copied().collect();
         for (id, _last_used) in entries {
@@ -149,17 +155,32 @@ impl TestEnv {
             }
             profiles.insert(id.to_string(), serde_json::Value::Object(entry));
         }
-        let index = serde_json::json!({
-            "version": 1,
-            "active_profile_id": active_id,
-            "profiles": serde_json::Value::Object(profiles)
-        });
+        let mut index = serde_json::Map::new();
+        index.insert("version".to_string(), serde_json::json!(3));
+        index.insert("profiles".to_string(), serde_json::Value::Object(profiles));
+        if let Some(active_id) = active_id {
+            index.insert(
+                "active_profile_id".to_string(),
+                serde_json::json!(active_id),
+            );
+        }
         let path = self.profiles_dir().join("profiles.json");
         fs::write(
-            path,
-            serde_json::to_string(&index).expect("serialize profiles.json"),
+            &path,
+            serde_json::to_string(&serde_json::Value::Object(index))
+                .expect("serialize profiles.json"),
         )
         .expect("write profiles.json");
+        let lock_path = self.profiles_dir().join("profiles.lock");
+        fs::write(&lock_path, "").expect("write profiles.lock");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+                .expect("chmod profiles.json");
+            fs::set_permissions(&lock_path, fs::Permissions::from_mode(0o600))
+                .expect("chmod profiles.lock");
+        }
     }
 
     fn read_auth(&self) -> String {
@@ -264,6 +285,19 @@ fn seed_current(env: &TestEnv) {
     );
 }
 
+fn profile_tokens(
+    account_id: &str,
+    email: &str,
+    plan: &str,
+    access_token: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "account_id": account_id,
+        "id_token": build_id_token(email, plan),
+        "access_token": access_token
+    })
+}
+
 fn ascii_only(raw: &str) -> String {
     let output = raw.replace('\r', "");
     let filtered: String = output.chars().filter(|ch| ch.is_ascii()).collect();
@@ -288,6 +322,46 @@ fn profile_label(env: &TestEnv, id: &str) -> Option<String> {
 fn read_json_file(path: &PathBuf) -> serde_json::Value {
     let raw = fs::read_to_string(path).expect("read json file");
     serde_json::from_str(&raw).expect("parse json file")
+}
+
+fn profile_auth_path(env: &TestEnv, id: &str) -> PathBuf {
+    env.profiles_dir().join(id).join("auth.json")
+}
+
+fn profile_config_path(env: &TestEnv, id: &str) -> PathBuf {
+    env.profiles_dir().join(id).join("config.toml")
+}
+
+fn profile_id_by_label(env: &TestEnv, label: &str) -> String {
+    let index = read_json_file(&env.profiles_dir().join("profiles.json"));
+    index
+        .get("profiles")
+        .and_then(|profiles| profiles.as_object())
+        .and_then(|profiles| {
+            profiles.iter().find_map(|(id, entry)| {
+                (entry.get("label").and_then(|value| value.as_str()) == Some(label))
+                    .then(|| id.clone())
+            })
+        })
+        .unwrap_or_else(|| panic!("missing profile id for label {label}"))
+}
+
+fn all_profile_ids(env: &TestEnv) -> Vec<String> {
+    let index = read_json_file(&env.profiles_dir().join("profiles.json"));
+    let mut ids: Vec<String> = index
+        .get("profiles")
+        .and_then(|profiles| profiles.as_object())
+        .map(|profiles| profiles.keys().cloned().collect())
+        .unwrap_or_default();
+    ids.sort();
+    ids
+}
+
+fn assert_snowflake_id(id: &str) {
+    assert!(
+        id.len() >= 10 && id.bytes().all(|byte| byte.is_ascii_digit()),
+        "expected numeric snowflake id, got {id}"
+    );
 }
 
 fn assert_managed_files(value: &serde_json::Value, expected: &[&str]) {
@@ -333,10 +407,22 @@ fn test_env_uses_unique_temp_dirs_and_binary_copies() {
 }
 
 fn seed_profiles(env: &TestEnv) {
-    seed_alpha(env);
-    env.run(&["save", "--label", "alpha"]);
+    write_profile_tokens(
+        env,
+        ALPHA_ID,
+        profile_tokens(ALPHA_ACCOUNT, ALPHA_EMAIL, ALPHA_PLAN, ALPHA_TOKEN),
+    );
+    write_profile_tokens(
+        env,
+        BETA_ID,
+        profile_tokens(BETA_ACCOUNT, BETA_EMAIL, BETA_PLAN, BETA_TOKEN),
+    );
+    env.write_profiles_index(
+        &[(ALPHA_ID, 200), (BETA_ID, 100)],
+        &[(ALPHA_ID, "alpha"), (BETA_ID, "beta")],
+        None,
+    );
     seed_beta(env);
-    env.run(&["save", "--label", "beta"]);
 }
 
 fn start_usage_server(
@@ -473,12 +559,35 @@ fn assert_profile_block_layout(output: &str, email: &str, next_email: Option<&st
 fn write_profile_tokens(env: &TestEnv, id: &str, tokens: serde_json::Value) {
     fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
     let value = serde_json::json!({ "tokens": tokens });
-    let path = env.profiles_dir().join(format!("{id}.json"));
+    let path = profile_auth_path(env, id);
+    fs::create_dir_all(path.parent().expect("profile parent")).expect("create profile dir");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            path.parent().expect("profile parent"),
+            fs::Permissions::from_mode(0o700),
+        )
+        .expect("chmod profile dir");
+    }
     fs::write(
-        path,
+        &path,
         serde_json::to_string(&value).expect("serialize profile"),
     )
     .expect("write profile");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("chmod profile");
+    }
+}
+
+fn write_raw_profile(env: &TestEnv, id: &str, contents: &str) -> PathBuf {
+    fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
+    let path = profile_auth_path(env, id);
+    fs::create_dir_all(path.parent().expect("profile parent")).expect("create profile dir");
+    fs::write(&path, contents).expect("write raw profile");
+    path
 }
 
 fn write_auth_tokens(env: &TestEnv, tokens: serde_json::Value) {
@@ -516,7 +625,9 @@ fn ui_save_command() {
     assert!(output.contains("Saved profile"));
     assert!(output.contains("alpha@example.com"));
     assert!(output.contains("[files: auth.json]"));
-    let profile_path = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
+    let id = profile_id_by_label(&env, "alpha");
+    assert_snowflake_id(&id);
+    let profile_path = profile_auth_path(&env, &id);
     assert!(profile_path.is_file());
 }
 
@@ -530,8 +641,10 @@ fn ui_save_include_config_stores_sidecar_and_metadata() {
 
     assert!(output.contains("Saved profile"));
     assert!(output.contains("[files: auth.json + config.toml]"));
-    let profile_path = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
-    let config_path = env.profiles_dir().join(format!("{ALPHA_ID}.config.toml"));
+    let id = profile_id_by_label(&env, "alpha");
+    assert_snowflake_id(&id);
+    let profile_path = profile_auth_path(&env, &id);
+    let config_path = profile_config_path(&env, &id);
     assert!(profile_path.is_file());
     assert!(config_path.is_file());
     assert!(
@@ -544,7 +657,7 @@ fn ui_save_include_config_stores_sidecar_and_metadata() {
     assert_managed_files(
         index
             .get("profiles")
-            .and_then(|profiles| profiles.get(ALPHA_ID))
+            .and_then(|profiles| profiles.get(&id))
             .expect("alpha index entry"),
         &["auth.json", "config.toml"],
     );
@@ -558,16 +671,12 @@ fn ui_save_include_config_missing_config_errors() {
     let err = env.run_expect_error(&["save", "--label", "alpha", "--include-config"]);
 
     assert!(err.contains("Config file not found"));
-    assert!(
-        !env.profiles_dir()
-            .join(format!("{ALPHA_ID}.json"))
-            .is_file()
-    );
-    assert!(
-        !env.profiles_dir()
-            .join(format!("{ALPHA_ID}.config.toml"))
-            .is_file()
-    );
+    let profile_dirs = fs::read_dir(env.profiles_dir())
+        .expect("read profiles dir")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .count();
+    assert_eq!(profile_dirs, 0);
 }
 
 #[test]
@@ -576,24 +685,17 @@ fn ui_save_without_include_config_removes_stale_sidecar() {
     seed_alpha(&env);
     env.write_config("http://third-party.example/backend-api");
     env.run(&["save", "--label", "alpha", "--include-config"]);
-    assert!(
-        env.profiles_dir()
-            .join(format!("{ALPHA_ID}.config.toml"))
-            .is_file()
-    );
+    let id = profile_id_by_label(&env, "alpha");
+    assert!(profile_config_path(&env, &id).is_file());
 
     env.run(&["save", "--label", "alpha"]);
 
-    assert!(
-        !env.profiles_dir()
-            .join(format!("{ALPHA_ID}.config.toml"))
-            .is_file()
-    );
+    assert!(!profile_config_path(&env, &id).is_file());
     let index = read_json_file(&env.profiles_dir().join("profiles.json"));
     assert_managed_files(
         index
             .get("profiles")
-            .and_then(|profiles| profiles.get(ALPHA_ID))
+            .and_then(|profiles| profiles.get(&id))
             .expect("alpha index entry"),
         &["auth.json"],
     );
@@ -613,8 +715,9 @@ fn ui_save_command_writes_private_files() {
     .expect("set permissive auth mode");
 
     env.run(&["save", "--label", "alpha"]);
+    let id = profile_id_by_label(&env, "alpha");
 
-    let profile_mode = fs::metadata(env.profiles_dir().join(format!("{ALPHA_ID}.json")))
+    let profile_mode = fs::metadata(profile_auth_path(&env, &id))
         .expect("profile metadata")
         .permissions()
         .mode()
@@ -653,29 +756,27 @@ fn ui_save_trims_label() {
     let json: serde_json::Value = serde_json::from_str(&index).expect("parse profiles.json");
     let label = json
         .get("profiles")
-        .and_then(|profiles| profiles.get(ALPHA_ID))
+        .and_then(|profiles| profiles.as_object())
+        .and_then(|profiles| profiles.values().next())
         .and_then(|entry| entry.get("label"))
         .and_then(|value| value.as_str());
     assert_eq!(label, Some("work"));
 }
 
 #[test]
-fn ui_save_renames_primary_candidate_to_canonical_id() {
+fn ui_save_reuses_existing_snowflake_profile_for_same_identity() {
     let env = TestEnv::new();
     seed_alpha(&env);
-    fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
-    let profile_one = env.profiles_dir().join(format!("{ALPHA_ID}-old.json"));
-    fs::copy(env.codex_dir().join("auth.json"), &profile_one).expect("seed profile one");
-    seed_alpha_with_token(&env, "token-alpha-rotated");
-    let profile_two = env.profiles_dir().join(format!("{ALPHA_ID}-alt.json"));
-    fs::copy(env.codex_dir().join("auth.json"), &profile_two).expect("seed profile two");
-    env.write_profiles_index(&[], &[], None);
+    env.run(&["save", "--label", "alpha"]);
+    let id = profile_id_by_label(&env, "alpha");
+    assert_snowflake_id(&id);
+
     seed_alpha_with_token(&env, "token-alpha-new");
-    env.run(&["save"]);
-    assert!(profile_one.is_file());
-    assert!(!profile_two.is_file());
-    let canonical = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
-    assert!(canonical.is_file());
+    env.run(&["save", "--label", "alpha"]);
+
+    assert_eq!(all_profile_ids(&env), vec![id.clone()]);
+    let contents = fs::read_to_string(profile_auth_path(&env, &id)).expect("read saved profile");
+    assert!(contents.contains("token-alpha-new"));
 }
 
 #[test]
@@ -695,7 +796,9 @@ fn ui_save_without_label_shows_label_hint() {
     let output = env.run(&["save"]);
     assert!(output.contains("Saved profile"));
     assert!(output.contains("label set --id"));
-    assert!(output.contains(ALPHA_ID));
+    let id = all_profile_ids(&env).into_iter().next().expect("saved id");
+    assert_snowflake_id(&id);
+    assert!(output.contains(&id));
 }
 
 #[test]
@@ -927,7 +1030,7 @@ fn ui_import_profiles_command() {
     {
         use std::os::unix::fs::PermissionsExt;
         for id in [ALPHA_ID, BETA_ID] {
-            let path = dest.profiles_dir().join(format!("{id}.json"));
+            let path = profile_auth_path(&dest, id);
             let mode = fs::metadata(path)
                 .expect("profile metadata")
                 .permissions()
@@ -946,6 +1049,7 @@ fn ui_export_import_preserves_config_profiles() {
     seed_beta(&src);
     src.write_config("http://third-party.example/backend-api");
     src.run(&["save", "--label", "beta", "--include-config"]);
+    let beta_id = profile_id_by_label(&src, "beta");
     let export_path = src.home_path().join("profiles-export.json");
     src.run(&["export", "--output", export_path.to_str().unwrap()]);
 
@@ -956,7 +1060,7 @@ fn ui_export_import_preserves_config_profiles() {
         .expect("profiles array");
     let beta = profiles
         .iter()
-        .find(|profile| profile.get("id") == Some(&serde_json::json!(BETA_ID)))
+        .find(|profile| profile.get("id") == Some(&serde_json::json!(beta_id)))
         .expect("beta profile");
     assert_managed_files(beta, &["auth.json", "config.toml"]);
     assert!(
@@ -967,7 +1071,7 @@ fn ui_export_import_preserves_config_profiles() {
 
     let dest = TestEnv::new();
     dest.run(&["import", "--input", export_path.to_str().unwrap()]);
-    let imported_config = dest.profiles_dir().join(format!("{BETA_ID}.config.toml"));
+    let imported_config = profile_config_path(&dest, &beta_id);
     assert!(imported_config.is_file());
     assert!(
         fs::read_to_string(&imported_config)
@@ -988,8 +1092,13 @@ fn ui_import_rejects_existing_id_conflict() {
     src.run(&["export", "--output", export_path.to_str().unwrap()]);
 
     let dest = TestEnv::new();
+    write_profile_tokens(
+        &dest,
+        BETA_ID,
+        profile_tokens(BETA_ACCOUNT, BETA_EMAIL, BETA_PLAN, BETA_TOKEN),
+    );
+    dest.write_profiles_index(&[(BETA_ID, 100)], &[(BETA_ID, "beta")], None);
     seed_beta(&dest);
-    dest.run(&["save", "--label", "beta"]);
     let err = dest.run_expect_error(&["import", "--input", export_path.to_str().unwrap()]);
     assert!(err.contains(BETA_ID));
     assert!(err.contains("already exists"));
@@ -1009,11 +1118,12 @@ fn ui_import_rejects_existing_label_conflict() {
     let src = TestEnv::new();
     seed_alpha(&src);
     src.run(&["save", "--label", "alpha"]);
+    let alpha_id = profile_id_by_label(&src, "alpha");
     let export_path = src.home_path().join("profiles-export-alpha.json");
     src.run(&[
         "export",
         "--id",
-        ALPHA_ID,
+        &alpha_id,
         "--output",
         export_path.to_str().unwrap(),
     ]);
@@ -1021,7 +1131,8 @@ fn ui_import_rejects_existing_label_conflict() {
     let dest = TestEnv::new();
     seed_beta(&dest);
     dest.run(&["save", "--label", "beta"]);
-    dest.run(&["label", "set", "--id", BETA_ID, "--to", "alpha"]);
+    let beta_id = profile_id_by_label(&dest, "beta");
+    dest.run(&["label", "set", "--id", &beta_id, "--to", "alpha"]);
     let err = dest.run_expect_error(&["import", "--input", export_path.to_str().unwrap()]);
     assert!(err.contains("Label 'alpha' already exists"));
 
@@ -1032,7 +1143,7 @@ fn ui_import_rejects_existing_label_conflict() {
         .and_then(|value| value.as_array())
         .expect("profiles array");
     assert_eq!(profiles.len(), 1);
-    assert_eq!(profiles[0].get("id").unwrap(), &serde_json::json!(BETA_ID));
+    assert_eq!(profiles[0].get("id").unwrap(), &serde_json::json!(beta_id));
     assert_eq!(
         profiles[0].get("label").unwrap(),
         &serde_json::json!("alpha")
@@ -1071,11 +1182,12 @@ fn ui_import_rejects_unsafe_profile_id() {
     let src = TestEnv::new();
     seed_alpha(&src);
     src.run(&["save", "--label", "alpha"]);
+    let alpha_id = profile_id_by_label(&src, "alpha");
     let export_path = src.home_path().join("profiles-export-alpha.json");
     src.run(&[
         "export",
         "--id",
-        ALPHA_ID,
+        &alpha_id,
         "--output",
         export_path.to_str().unwrap(),
     ]);
@@ -1109,11 +1221,12 @@ fn ui_import_rejects_reserved_profile_id() {
     let src = TestEnv::new();
     seed_alpha(&src);
     src.run(&["save", "--label", "alpha"]);
+    let alpha_id = profile_id_by_label(&src, "alpha");
     let export_path = src.home_path().join("profiles-export-alpha.json");
     src.run(&[
         "export",
         "--id",
-        ALPHA_ID,
+        &alpha_id,
         "--output",
         export_path.to_str().unwrap(),
     ]);
@@ -1198,8 +1311,7 @@ fn ui_doctor_reports_incomplete_auth() {
 #[test]
 fn ui_doctor_reports_invalid_profile_file_and_index() {
     let env = TestEnv::new();
-    fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
-    fs::write(env.profiles_dir().join("broken.json"), "{not-json").expect("write broken profile");
+    write_raw_profile(&env, "broken", "{not-json");
     fs::write(env.profiles_dir().join("profiles.json"), "{not-json").expect("write broken index");
     let output = env.run(&["doctor"]);
     assert!(output.contains("[error] profiles index:"));
@@ -1294,10 +1406,14 @@ fn ui_doctor_fix_rebuilds_invalid_index() {
         .get("profiles")
         .and_then(|value| value.as_array())
         .expect("profiles array");
+    let alpha_id = all_profile_ids(&env)
+        .into_iter()
+        .next()
+        .expect("rebuilt profile id");
     assert!(
         profiles
             .iter()
-            .any(|profile| profile.get("id") == Some(&serde_json::json!(ALPHA_ID)))
+            .any(|profile| profile.get("id") == Some(&serde_json::json!(alpha_id)))
     );
 }
 
@@ -1387,7 +1503,7 @@ fn ui_doctor_fix_repairs_existing_permissions() {
         )
         .expect("set permissive index mode");
         fs::set_permissions(
-            env.profiles_dir().join(format!("{ALPHA_ID}.json")),
+            profile_auth_path(&env, ALPHA_ID),
             fs::Permissions::from_mode(0o644),
         )
         .expect("set permissive profile mode");
@@ -1414,7 +1530,7 @@ fn ui_doctor_fix_repairs_existing_permissions() {
         for file in [
             env.codex_dir().join("auth.json"),
             env.profiles_dir().join("profiles.json"),
-            env.profiles_dir().join(format!("{ALPHA_ID}.json")),
+            profile_auth_path(&env, ALPHA_ID),
             env.profiles_dir().join("profiles.lock"),
         ] {
             let mode = fs::metadata(file)
@@ -1463,8 +1579,8 @@ fn ui_doctor_fix_does_not_index_stray_json() {
 #[test]
 fn ui_doctor_fix_json_storage_shape_error() {
     let env = TestEnv::new();
-    fs::write(env.codex_dir().join("profiles"), "not-a-directory")
-        .expect("write invalid profiles path");
+    fs::create_dir_all(env.profiles_dir().parent().expect("profiles parent")).expect("mkdir");
+    fs::write(env.profiles_dir(), "not-a-directory").expect("write invalid profiles path");
 
     let output = env.run(&["doctor", "--fix", "--json"]);
     let json: serde_json::Value = serde_json::from_str(&output).expect("parse doctor json");
@@ -1545,7 +1661,7 @@ fn ui_load_command_restores_private_auth_permissions() {
     seed_profiles(&env);
     seed_alpha(&env);
     fs::set_permissions(
-        env.profiles_dir().join(format!("{BETA_ID}.json")),
+        profile_auth_path(&env, BETA_ID),
         fs::Permissions::from_mode(0o644),
     )
     .expect("set permissive saved profile mode");
@@ -1628,12 +1744,10 @@ fn ui_load_rejects_label_with_id() {
 #[test]
 fn ui_load_rejects_invalid_profile_json() {
     let env = TestEnv::new();
-    fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
-    let profile_path = env.profiles_dir().join("broken.json");
-    fs::write(&profile_path, "{").expect("write profile");
+    let profile_path = write_raw_profile(&env, "broken", "{");
     env.write_profiles_index(&[("broken", 123)], &[("broken", "broken")], None);
     let err = env.run_expect_error(&["load", "--label", "broken"]);
-    assert!(err.contains("Selected profile is invalid") || err.contains("broken.json"));
+    assert!(err.contains("Selected profile is invalid") || err.contains("auth.json"));
     assert!(profile_path.is_file());
 }
 
@@ -1668,7 +1782,7 @@ fn ui_delete_command() {
     let output = env.run(&["delete", "--label", "beta", "--yes"]);
     assert!(output.contains("Deleted profile"));
     assert!(output.contains("beta@example.com"));
-    let profile_path = env.profiles_dir().join(format!("{BETA_ID}.json"));
+    let profile_path = profile_auth_path(&env, BETA_ID);
     assert!(!profile_path.is_file());
 }
 
@@ -1678,16 +1792,13 @@ fn ui_delete_removes_saved_config_sidecar() {
     seed_alpha(&env);
     env.write_config("http://third-party.example/backend-api");
     env.run(&["save", "--label", "alpha", "--include-config"]);
-    let config_path = env.profiles_dir().join(format!("{ALPHA_ID}.config.toml"));
+    let alpha_id = profile_id_by_label(&env, "alpha");
+    let config_path = profile_config_path(&env, &alpha_id);
     assert!(config_path.is_file());
 
     env.run(&["delete", "--label", "alpha", "--yes"]);
 
-    assert!(
-        !env.profiles_dir()
-            .join(format!("{ALPHA_ID}.json"))
-            .is_file()
-    );
+    assert!(!profile_auth_path(&env, &alpha_id).is_file());
     assert!(!config_path.is_file());
 }
 
@@ -1698,7 +1809,7 @@ fn ui_delete_by_id_command() {
     let output = env.run(&["delete", "--id", BETA_ID, "--yes"]);
     assert!(output.contains("Deleted profile"));
     assert!(output.contains("beta@example.com"));
-    let profile_path = env.profiles_dir().join(format!("{BETA_ID}.json"));
+    let profile_path = profile_auth_path(&env, BETA_ID);
     assert!(!profile_path.is_file());
 }
 
@@ -1708,12 +1819,8 @@ fn ui_delete_multiple_ids_command() {
     seed_profiles(&env);
     let output = env.run(&["delete", "--id", BETA_ID, "--id", ALPHA_ID, "--yes"]);
     assert!(output.contains("Deleted 2 profiles"));
-    assert!(
-        !env.profiles_dir()
-            .join(format!("{ALPHA_ID}.json"))
-            .is_file()
-    );
-    assert!(!env.profiles_dir().join(format!("{BETA_ID}.json")).is_file());
+    assert!(!profile_auth_path(&env, ALPHA_ID).is_file());
+    assert!(!profile_auth_path(&env, BETA_ID).is_file());
 }
 
 #[test]
@@ -1879,9 +1986,11 @@ fn ui_list_shows_and_serializes_managed_files() {
     let env = TestEnv::new();
     seed_alpha(&env);
     env.run(&["save", "--label", "alpha"]);
+    let alpha_id = profile_id_by_label(&env, "alpha");
     seed_beta(&env);
     env.write_config("http://third-party.example/backend-api");
     env.run(&["save", "--label", "beta", "--include-config"]);
+    let beta_id = profile_id_by_label(&env, "beta");
 
     let output = env.run(&["list"]);
     assert!(output.contains("[files: auth.json]"));
@@ -1895,11 +2004,11 @@ fn ui_list_shows_and_serializes_managed_files() {
         .expect("profiles array");
     let alpha = profiles
         .iter()
-        .find(|profile| profile.get("id") == Some(&serde_json::json!(ALPHA_ID)))
+        .find(|profile| profile.get("id") == Some(&serde_json::json!(alpha_id)))
         .expect("alpha profile");
     let beta = profiles
         .iter()
-        .find(|profile| profile.get("id") == Some(&serde_json::json!(BETA_ID)))
+        .find(|profile| profile.get("id") == Some(&serde_json::json!(beta_id)))
         .expect("beta profile");
     assert_managed_files(alpha, &["auth.json"]);
     assert_managed_files(beta, &["auth.json", "config.toml"]);
@@ -1999,7 +2108,8 @@ fn ui_list_does_not_sync_current_profile() {
     env.run(&["save", "--label", "alpha"]);
     seed_alpha_with_token(&env, "token-alpha-rotated");
     env.run(&["list"]);
-    let profile_path = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
+    let alpha_id = profile_id_by_label(&env, "alpha");
+    let profile_path = profile_auth_path(&env, &alpha_id);
     let contents = fs::read_to_string(profile_path).expect("read profile");
     assert!(!contents.contains("token-alpha-rotated"));
     assert!(contents.contains(ALPHA_TOKEN));
@@ -2029,19 +2139,20 @@ fn ui_profiles_index_does_not_store_last_used() {
 fn ui_save_adds_missing_profiles_to_index() {
     let env = TestEnv::new();
     seed_alpha(&env);
-    let profile_path = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
-    fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
+    let profile_path = profile_auth_path(&env, ALPHA_ID);
+    fs::create_dir_all(profile_path.parent().expect("profile parent")).expect("create profile dir");
     fs::copy(env.codex_dir().join("auth.json"), &profile_path).expect("seed profile file");
     env.write_profiles_index(&[], &[], None);
     seed_beta(&env);
     let output = env.run(&["save", "--label", "beta"]);
     assert!(output.contains("Saved profile"));
+    let beta_id = profile_id_by_label(&env, "beta");
     let contents =
         fs::read_to_string(env.profiles_dir().join("profiles.json")).expect("read profiles.json");
     let json: serde_json::Value = serde_json::from_str(&contents).expect("parse profiles.json");
     let profiles = json.get("profiles").expect("profiles map");
     assert!(profiles.get(ALPHA_ID).is_some());
-    assert!(profiles.get(BETA_ID).is_some());
+    assert!(profiles.get(&beta_id).is_some());
 }
 
 #[test]
@@ -2214,10 +2325,11 @@ fn ui_status_json_serializes_managed_files_for_config_profile() {
     let (usage_addr, usage_handle) = start_usage_server(usage_body, 6).expect("usage server");
     env.write_config(&format!("http://{usage_addr}/backend-api"));
     env.run(&["save", "--label", "beta", "--include-config"]);
+    let beta_id = profile_id_by_label(&env, "beta");
 
     let output = env.run(&["status", "--label", "beta", "--json"]);
     let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
-    assert_eq!(profile.get("id").unwrap(), &serde_json::json!(BETA_ID));
+    assert_eq!(profile.get("id").unwrap(), &serde_json::json!(beta_id));
     assert_managed_files(&profile, &["auth.json", "config.toml"]);
 
     let _ = usage_handle.join();
@@ -2837,9 +2949,7 @@ fn ui_status_all_json_includes_current_api_profile() {
 #[test]
 fn ui_list_preserves_invalid_profiles() {
     let env = TestEnv::new();
-    fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
-    let bad_profile = env.profiles_dir().join("bad.json");
-    fs::write(&bad_profile, "{").expect("write bad profile");
+    let bad_profile = write_raw_profile(&env, "bad", "{");
     env.write_profiles_index(&[("bad", 123)], &[("bad", "bad")], None);
 
     env.run(&["list"]);
@@ -2892,7 +3002,8 @@ fn ui_status_refreshes_and_mutates_profile_on_usage_401() {
     assert!(auth_contents.contains("new-access"));
     assert!(auth_contents.contains("new-refresh"));
     assert!(!auth_contents.contains("old-access"));
-    let profile_path = env.profiles_dir().join(format!("{ALPHA_ID}.json"));
+    let alpha_id = profile_id_by_label(&env, "alpha");
+    let profile_path = profile_auth_path(&env, &alpha_id);
     let profile_contents = fs::read_to_string(profile_path).expect("read profile");
     assert!(profile_contents.contains("new-access"));
     assert!(profile_contents.contains("new-refresh"));
@@ -2916,6 +3027,7 @@ fn ui_status_all_reports_invalid_base_url() {
 #[test]
 fn ui_status_reports_snapshot_errors() {
     let env = TestEnv::new();
+    fs::create_dir_all(env.profiles_dir().parent().expect("profiles parent")).expect("mkdir");
     fs::write(env.profiles_dir(), "not-a-directory").expect("create invalid profiles path");
 
     let err = env.run_expect_error(&["status"]);
@@ -3051,9 +3163,10 @@ fn json_label_set_returns_success_shape() {
     let env = TestEnv::new();
     seed_alpha(&env);
     env.run(&["save", "--label", "alpha"]);
+    let alpha_id = profile_id_by_label(&env, "alpha");
 
     let raw = env.run(&[
-        "label", "set", "--id", ALPHA_ID, "--to", "newalpha", "--json",
+        "label", "set", "--id", &alpha_id, "--to", "newalpha", "--json",
     ]);
     let v = parse_json(&raw);
 
@@ -3070,8 +3183,9 @@ fn json_label_clear_returns_success_shape() {
     let env = TestEnv::new();
     seed_alpha(&env);
     env.run(&["save", "--label", "alpha"]);
+    let alpha_id = profile_id_by_label(&env, "alpha");
 
-    let raw = env.run(&["label", "clear", "--id", ALPHA_ID, "--json"]);
+    let raw = env.run(&["label", "clear", "--id", &alpha_id, "--json"]);
     let v = parse_json(&raw);
 
     assert_eq!(v["command"], "label clear");
