@@ -13,7 +13,7 @@ use crate::{
 use crate::{is_plain, style_text, use_color_stdout};
 
 const DEFAULT_BASE_URL: &str = "https://chatgpt.com/backend-api";
-const USER_AGENT: &str = "codex-profiles";
+const USER_AGENT: &str = "codexswitch-cli";
 const USAGE_RETRY_ATTEMPTS: usize = 3;
 const USAGE_RETRY_BASE_MS: u64 = 250;
 const USAGE_BACKOFF_MAX_MS: u64 = 3_000;

@@ -25,7 +25,7 @@ pub const AUTH_ERR_PROFILE_MISSING_ACCESS_TOKEN: &str =
 pub const AUTH_ERR_PROFILE_NO_REFRESH_TOKEN: &str =
     "Error: This profile has no refresh token. Run `codex login` and save again.";
 pub const AUTH_ERR_REFRESH_STATE_CHANGED: &str = "Error: Auth changed on disk. Reload and retry.";
-pub const AUTH_ERR_UNSUPPORTED_STORE_MODE: &str = "Error: Codex auth store mode `{}` is not yet supported. Configure file-backed auth to use codex-profiles.";
+pub const AUTH_ERR_UNSUPPORTED_STORE_MODE: &str = "Error: Codex auth store mode `{}` is not yet supported. Configure file-backed auth to use codexswitch-cli.";
 pub const AUTH_ERR_REFRESH_FAILED_OTHER: &str = "Error: Token refresh failed: {}";
 pub const AUTH_ERR_INVALID_REFRESH_RESPONSE: &str = "Error: Invalid refresh response: {}";
 pub const AUTH_ERR_REFRESH_MISSING_ACCESS_TOKEN: &str =

@@ -126,19 +126,19 @@ jobs:
         include:
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            binary: codex-profiles
+            binary: codexswitch-cli
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            binary: codex-profiles
+            binary: codexswitch-cli
           - runner: macos-15-large
             target: x86_64-apple-darwin
-            binary: codex-profiles
+            binary: codexswitch-cli
           - runner: macos-15
             target: aarch64-apple-darwin
-            binary: codex-profiles
+            binary: codexswitch-cli
           - runner: windows-2025
             target: x86_64-pc-windows-msvc
-            binary: codex-profiles.exe
+            binary: codexswitch-cli.exe
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -165,13 +165,13 @@ jobs:
         run: |
           set -euo pipefail
           cargo fetch --locked
-          cargo build --release --target ${{ matrix.target }} --bin codex-profiles --locked
+          cargo build --release --target ${{ matrix.target }} --bin codexswitch-cli --locked
           echo "Build output:"
           ls -la target/${{ matrix.target }}/release || true
       - name: Upload binary
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: codex-profiles-${{ matrix.target }}
+          name: codexswitch-cli-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
           if-no-files-found: error
 
@@ -236,7 +236,7 @@ jobs:
           version="${{ needs.tag-check.outputs.version }}"
 
           # Safety gate: only commit to production repository
-          if [[ "${GITHUB_REPOSITORY}" != "midhunmonachan/codex-profiles" ]]; then
+          if [[ "${GITHUB_REPOSITORY}" != "syntaxskills/codexswitch-cli" ]]; then
             echo "Skipping checksum commit: not production repository (current: ${GITHUB_REPOSITORY})"
             echo "Checksums generated but not committed to repo"
             ls -la dist/checksums/
@@ -279,7 +279,7 @@ jobs:
         run: |
           set -euo pipefail
           # Safety gate: only publish from production repository
-          if [[ "${GITHUB_REPOSITORY}" != "midhunmonachan/codex-profiles" ]]; then
+          if [[ "${GITHUB_REPOSITORY}" != "syntaxskills/codexswitch-cli" ]]; then
             echo "Skipping crates.io publish: not production repository (current: ${GITHUB_REPOSITORY})"
             exit 0
           fi
@@ -291,8 +291,8 @@ jobs:
           fi
 
           version="${{ needs.tag-check.outputs.version }}"
-          if curl -fsS "https://crates.io/api/v1/crates/codex-profiles/${version}" >/dev/null 2>&1; then
-            echo "codex-profiles ${version} is already published to crates.io; skipping"
+          if curl -fsS -H "User-Agent: ${GITHUB_REPOSITORY}" "https://crates.io/api/v1/crates/codexswitch-cli/${version}" >/dev/null 2>&1; then
+            echo "codexswitch-cli ${version} is already published to crates.io; skipping"
             exit 0
           fi
 
@@ -304,7 +304,7 @@ jobs:
         run: |
           set -euo pipefail
           # Safety gate: only publish from production repository
-          if [[ "${GITHUB_REPOSITORY}" != "midhunmonachan/codex-profiles" ]]; then
+          if [[ "${GITHUB_REPOSITORY}" != "syntaxskills/codexswitch-cli" ]]; then
             echo "Skipping npm publish: not production repository (current: ${GITHUB_REPOSITORY})"
             exit 0
           fi
@@ -344,11 +344,11 @@ jobs:
           }
 
           # Publish platform packages first so optionalDependencies can resolve.
-          for pkg in dist/npm-packages/codex-profiles-*-*.tgz; do
+          for pkg in dist/npm-packages/codexswitch-cli-*-*.tgz; do
             publish_if_missing "$pkg"
           done
 
-          publish_if_missing "dist/npm-packages/codex-profiles-${version}.tgz"
+          publish_if_missing "dist/npm-packages/codexswitch-cli-${version}.tgz"
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2

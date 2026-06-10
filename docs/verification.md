@@ -15,10 +15,10 @@ Download the release asset you want to inspect together with `SHA256SUMS` and
 ```bash
 TAG="vX.Y.Z"
 gh release download "$TAG" \
-  --repo midhunmonachan/codex-profiles \
+  --repo syntaxskills/codexswitch-cli \
   --pattern 'SHA256SUMS' \
   --pattern 'release-manifest.json' \
-  --pattern 'codex-profiles-x86_64-unknown-linux-gnu.tar.gz'
+  --pattern 'codexswitch-cli-x86_64-unknown-linux-gnu.tar.gz'
 ```
 
 Replace `vX.Y.Z` with the release tag you want to verify.
@@ -43,8 +43,8 @@ versions, and the same per-asset hashes from `SHA256SUMS`.
 Use the GitHub CLI to verify a release asset attestation:
 
 ```bash
-gh attestation verify codex-profiles-x86_64-unknown-linux-gnu.tar.gz \
-  -R midhunmonachan/codex-profiles
+gh attestation verify codexswitch-cli-x86_64-unknown-linux-gnu.tar.gz \
+  -R syntaxskills/codexswitch-cli
 ```
 
 Replace the asset name with the file you downloaded from the release.

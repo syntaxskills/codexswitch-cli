@@ -49,7 +49,8 @@ use crate::{UsageLock, format_usage_unavailable, lock_usage, read_base_url, usag
 
 const DEFAULT_USAGE_CONCURRENCY: usize = 32;
 const MAX_USAGE_CONCURRENCY: usize = 128;
-const USAGE_CONCURRENCY_ENV: &str = "CODEX_PROFILES_USAGE_CONCURRENCY";
+const USAGE_CONCURRENCY_ENV: &str = "CODEXSWITCH_CLI_USAGE_CONCURRENCY";
+const LEGACY_USAGE_CONCURRENCY_ENV: &str = "CODEX_PROFILES_USAGE_CONCURRENCY";
 
 #[derive(Serialize, Deserialize)]
 struct ExportBundle {
@@ -2445,6 +2446,7 @@ fn make_entries(
 
 fn usage_concurrency() -> usize {
     env::var(USAGE_CONCURRENCY_ENV)
+        .or_else(|_| env::var(LEGACY_USAGE_CONCURRENCY_ENV))
         .ok()
         .and_then(|value| value.trim().parse::<usize>().ok())
         .filter(|value| *value > 0)

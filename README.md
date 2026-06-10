@@ -1,12 +1,12 @@
-<h1 align="center">Codex Profiles</h1>
+<h1 align="center">CodexSwitch CLI</h1>
 
 <p align="center">Seamlessly switch between multiple Codex accounts</p>
 
 <p align="center">
-  <a href="https://github.com/midhunmonachan/codex-profiles/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/midhunmonachan/codex-profiles/tests.yml?branch=main&label=tests" alt="Tests" /></a>
-  <a href="https://github.com/midhunmonachan/codex-profiles/releases"><img src="https://img.shields.io/github/v/release/midhunmonachan/codex-profiles" alt="Release" /></a>
-  <a href="https://github.com/midhunmonachan/codex-profiles/stargazers"><img src="https://img.shields.io/github/stars/midhunmonachan/codex-profiles?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/midhunmonachan/codex-profiles/blob/main/LICENSE"><img src="https://img.shields.io/github/license/midhunmonachan/codex-profiles?color=blue" alt="License" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/syntaxskills/codexswitch-cli/tests.yml?branch=main&label=tests" alt="Tests" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/releases"><img src="https://img.shields.io/github/v/release/syntaxskills/codexswitch-cli" alt="Release" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/stargazers"><img src="https://img.shields.io/github/stars/syntaxskills/codexswitch-cli?style=flat" alt="Stars" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/syntaxskills/codexswitch-cli?color=blue" alt="License" /></a>
 </p>
 
 <p align="center">
@@ -21,7 +21,11 @@
 
 ## Overview
 
-Codex Profiles lets you save and switch easily between multiple Codex accounts without repeated `codex login`
+CodexSwitch CLI lets you save and switch easily between multiple Codex accounts without repeated `codex login`
+
+CodexSwitch CLI is an actively maintained, MIT-licensed fork of
+[`midhunmonachan/codex-profiles`](https://github.com/midhunmonachan/codex-profiles).
+The original copyright and license notice are preserved in this repository.
 
 ## Install
 
@@ -39,11 +43,11 @@ Codex Profiles lets you save and switch easily between multiple Codex accounts w
   <tbody>
     <tr>
       <td>npm</td>
-      <td style="white-space: nowrap;"><code>npm install -g codex-profiles</code></td>
+      <td style="white-space: nowrap;"><code>npm install -g codexswitch-cli</code></td>
     </tr>
     <tr>
       <td>Bun</td>
-      <td style="white-space: nowrap;"><code>bun install -g codex-profiles</code></td>
+      <td style="white-space: nowrap;"><code>bun install -g codexswitch-cli</code></td>
     </tr>
   </tbody>
 </table>
@@ -51,14 +55,14 @@ Codex Profiles lets you save and switch easily between multiple Codex accounts w
 ### Manual install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/midhunmonachan/codex-profiles/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/syntaxskills/codexswitch-cli/main/install.sh | bash
 ```
 
 <details>
 <summary>Advanced install option (build from source)</summary>
 
 ```bash
-cargo install --locked codex-profiles
+cargo install --locked codexswitch-cli
 ```
 
 Requires Rust 1.94+
@@ -68,15 +72,17 @@ Requires Rust 1.94+
 ## Quick Start
 
 ```bash
-codex-profiles save --label work
-codex-profiles list
-codex-profiles load --label work --force
+codexswitch-cli save --label work
+codexswitch-cli list
+codexswitch-cli load --label work --force
 ```
+
+The npm package also installs `codexswitch` and `codex-profiles` command aliases.
 
 ## Usage
 
 > [!NOTE]
-> Codex Profiles data is stored under `~/.codex/profiles/` on your machine
+> CodexSwitch CLI data is stored under `~/.codex/profiles/` on your machine
 
 ### Command Reference
 
@@ -89,47 +95,47 @@ codex-profiles load --label work --force
   </thead>
   <tbody>
     <tr>
-      <td width="43%"><code>codex-profiles save</code><br/><code>[--label &lt;name&gt;]</code></td>
+      <td width="43%"><code>codexswitch-cli save</code><br/><code>[--label &lt;name&gt;]</code></td>
       <td>Save current <code>auth.json</code><br/>Optional label</td>
     </tr>
     <tr>
-      <td width="43%"><code>codex-profiles load</code><br/><code>(--label &lt;name&gt; | --id &lt;profile-id&gt;)</code><br/><code>[--force]</code></td>
+      <td width="43%"><code>codexswitch-cli load</code><br/><code>(--label &lt;name&gt; | --id &lt;profile-id&gt;)</code><br/><code>[--force]</code></td>
       <td>Load a saved profile<br/>Choose a target profile and force when needed</td>
     </tr>
     <tr>
-      <td width="43%"><code>codex-profiles list</code><br/><code>[--show-id] [--json]</code></td>
+      <td width="43%"><code>codexswitch-cli list</code><br/><code>[--show-id] [--json]</code></td>
       <td>List profiles<br/>Supports id and JSON views</td>
     </tr>
     <tr>
-      <td width="44%"><code>codex-profiles export</code><br/><code>[--label &lt;name&gt;]</code><br/><code>[--id &lt;profile-id&gt; (repeatable)]</code></td>
+      <td width="44%"><code>codexswitch-cli export</code><br/><code>[--label &lt;name&gt;]</code><br/><code>[--id &lt;profile-id&gt; (repeatable)]</code></td>
       <td>Export to a JSON bundle<br/>Default: all profiles, or a selected subset</td>
     </tr>
     <tr>
-      <td width="43%"><code>codex-profiles import</code><br/><code>--input &lt;file&gt;</code></td>
+      <td width="43%"><code>codexswitch-cli import</code><br/><code>--input &lt;file&gt;</code></td>
       <td>Import from a JSON bundle</td>
     </tr>
     <tr>
-      <td width="43%"><code>codex-profiles doctor</code><br/><code>[--fix] [--json]</code></td>
+      <td width="43%"><code>codexswitch-cli doctor</code><br/><code>[--fix] [--json]</code></td>
       <td>Run diagnostics and optionally apply safe repairs</td>
     </tr>
     <tr>
-      <td width="43%"><code>codex-profiles label set</code><br/><code>(--label &lt;name&gt; | --id &lt;profile-id&gt;)</code><br/><code>--to &lt;label&gt;</code></td>
+      <td width="43%"><code>codexswitch-cli label set</code><br/><code>(--label &lt;name&gt; | --id &lt;profile-id&gt;)</code><br/><code>--to &lt;label&gt;</code></td>
       <td>Set or replace a label<br/>Target one profile</td>
     </tr>
     <tr>
-      <td width="43%"><code>codex-profiles label clear</code><br/><code>(--label &lt;name&gt; | --id &lt;profile-id&gt;)</code></td>
+      <td width="43%"><code>codexswitch-cli label clear</code><br/><code>(--label &lt;name&gt; | --id &lt;profile-id&gt;)</code></td>
       <td>Clear a label<br/>Target one profile</td>
     </tr>
     <tr>
-      <td width="43%"><code>codex-profiles label rename</code><br/><code>--label &lt;label&gt; --to &lt;label&gt;</code></td>
+      <td width="43%"><code>codexswitch-cli label rename</code><br/><code>--label &lt;label&gt; --to &lt;label&gt;</code></td>
       <td>Rename an existing label</td>
     </tr>
     <tr>
-      <td width="44%"><code>codex-profiles status</code><br/><code>[--label &lt;name&gt; | --id &lt;profile-id&gt;]</code><br/><code>[--all] [--json]</code></td>
+      <td width="44%"><code>codexswitch-cli status</code><br/><code>[--label &lt;name&gt; | --id &lt;profile-id&gt;]</code><br/><code>[--all] [--json]</code></td>
       <td>Show usage for active, selected, or all targets<br/>Human-readable or JSON output</td>
     </tr>
     <tr>
-      <td width="44%"><code>codex-profiles delete</code><br/><code>[--label &lt;name&gt; | --id &lt;profile-id&gt; (repeatable)]</code><br/><code>[--yes]</code></td>
+      <td width="44%"><code>codexswitch-cli delete</code><br/><code>[--label &lt;name&gt; | --id &lt;profile-id&gt; (repeatable)]</code><br/><code>[--yes]</code></td>
       <td>Delete by label or id<br/>Supports bulk delete and non-interactive mode</td>
     </tr>
   </tbody>
@@ -142,18 +148,18 @@ codex-profiles load --label work --force
 
 ## More Docs
 
-- [Release verification guide](https://github.com/midhunmonachan/codex-profiles/blob/main/docs/verification.md)
-- [Contribution guide](https://github.com/midhunmonachan/codex-profiles/blob/main/CONTRIBUTING.md)
+- [Release verification guide](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/verification.md)
+- [Contribution guide](https://github.com/syntaxskills/codexswitch-cli/blob/main/CONTRIBUTING.md)
 
 ## FAQ
 
 <details>
 <summary>How do I uninstall?</summary>
 
-> - npm: `npm uninstall -g codex-profiles`
-> - Bun: `bun uninstall -g codex-profiles`
-> - Cargo: `cargo uninstall codex-profiles`
-> - Manual: `rm ~/.local/bin/codex-profiles`
+> - npm: `npm uninstall -g codexswitch-cli`
+> - Bun: `bun uninstall -g codexswitch-cli`
+> - Cargo: `cargo uninstall codexswitch-cli`
+> - Manual: `rm ~/.local/bin/codexswitch-cli`
 </details>
 
 <details>
@@ -187,13 +193,13 @@ codex-profiles load --label work --force
 <summary>How can I verify my installation?</summary>
 
 > ```bash
-> codex-profiles --version
-> codex-profiles list
+> codexswitch-cli --version
+> codexswitch-cli list
 > ```
 </details>
 
 <details>
 <summary>Where are release verification steps documented?</summary>
 
-> In [docs/verification.md](https://github.com/midhunmonachan/codex-profiles/blob/main/docs/verification.md)
+> In [docs/verification.md](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/verification.md)
 </details>

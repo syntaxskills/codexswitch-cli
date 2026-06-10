@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Installer for codex-profiles
+# Installer for codexswitch-cli
 # Detects OS/arch, downloads binary from releases, verifies checksum from release
 
 set -euo pipefail
 
-VERSION="${CODEX_PROFILES_VERSION:-}"
-REPO="midhunmonachan/codex-profiles"
-INSTALL_DIR="${CODEX_PROFILES_INSTALL_DIR:-$HOME/.local/bin}"
+VERSION="${CODEXSWITCH_CLI_VERSION:-${CODEX_PROFILES_VERSION:-}}"
+REPO="syntaxskills/codexswitch-cli"
+INSTALL_DIR="${CODEXSWITCH_CLI_INSTALL_DIR:-${CODEX_PROFILES_INSTALL_DIR:-$HOME/.local/bin}}"
+ALLOW_INSECURE_INSTALL="${CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL:-${CODEX_PROFILES_ALLOW_INSECURE_INSTALL:-0}}"
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
     BOLD='\033[1m'
@@ -89,7 +90,7 @@ resolve_version() {
     info "Resolving latest released version"
 
     latest="$(fetch_latest_version_from_github)" \
-        || error "could not resolve the latest published GitHub release automatically.\nSet CODEX_PROFILES_VERSION or pass --version to install a specific release."
+        || error "could not resolve the latest published GitHub release automatically.\nSet CODEXSWITCH_CLI_VERSION or pass --version to install a specific release."
 
     VERSION="$latest"
     info "Resolved version from GitHub releases: v${VERSION}"
@@ -179,11 +180,11 @@ verify_checksum() {
     elif command -v openssl > /dev/null 2>&1; then
         actual="$(openssl dgst -sha256 "$file" | awk '{print $NF}')"
     else
-        if [[ "${CODEX_PROFILES_ALLOW_INSECURE_INSTALL:-0}" == "1" ]]; then
-            warn "sha256sum/shasum/openssl not found, skipping checksum verification because CODEX_PROFILES_ALLOW_INSECURE_INSTALL=1"
+        if [[ "${ALLOW_INSECURE_INSTALL}" == "1" ]]; then
+            warn "sha256sum/shasum/openssl not found, skipping checksum verification because CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL=1"
             return 0
         fi
-        error "need sha256sum, shasum, or openssl for checksum verification.\nSet CODEX_PROFILES_ALLOW_INSECURE_INSTALL=1 to bypass (not recommended)."
+        error "need sha256sum, shasum, or openssl for checksum verification.\nSet CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL=1 to bypass (not recommended)."
     fi
     
     if [ "$expected" != "$actual" ]; then
@@ -205,17 +206,17 @@ main() {
     need_cmd chmod
     resolve_version
     
-    info "Installing codex-profiles v$VERSION"
+    info "Installing codexswitch-cli v$VERSION"
     
     local target
     target="$(detect_platform)"
     info "Detected platform: $target"
     
     local base_url="https://github.com/$REPO/releases/download/v$VERSION"
-    local archive_name="codex-profiles-${target}.tar.gz"
+    local archive_name="codexswitch-cli-${target}.tar.gz"
     local is_windows=0
     if [[ "$target" == *"windows"* ]]; then
-        archive_name="codex-profiles-${target}.exe.zip"
+        archive_name="codexswitch-cli-${target}.exe.zip"
         is_windows=1
         need_cmd unzip
     else
@@ -237,11 +238,11 @@ main() {
     
     info "Downloading checksums from release..."
     if ! download_file "$checksum_url" "$checksum_path" "false"; then
-        if [[ "${CODEX_PROFILES_ALLOW_INSECURE_INSTALL:-0}" == "1" ]]; then
+        if [[ "${ALLOW_INSECURE_INSTALL}" == "1" ]]; then
             warn "Could not download checksum file from release"
-            warn "Proceeding without verification because CODEX_PROFILES_ALLOW_INSECURE_INSTALL=1"
+            warn "Proceeding without verification because CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL=1"
         else
-            error "could not download checksum file from release; aborting install.\nSet CODEX_PROFILES_ALLOW_INSECURE_INSTALL=1 to bypass (not recommended)."
+            error "could not download checksum file from release; aborting install.\nSet CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL=1 to bypass (not recommended)."
         fi
     else
         verify_checksum "$archive_path" "$checksum_path"
@@ -255,16 +256,16 @@ main() {
     fi
     
     # Determine binary name based on OS
-    local binary_name="codex-profiles"
+    local binary_name="codexswitch-cli"
     if [[ "$target" == *"windows"* ]]; then
-        binary_name="codex-profiles.exe"
+        binary_name="codexswitch-cli.exe"
     fi
     
     local binary_path
     if [ -f "$tmpdir/$binary_name" ]; then
         binary_path="$tmpdir/$binary_name"
-    elif [ -f "$tmpdir/codex-profiles/$binary_name" ]; then
-        binary_path="$tmpdir/codex-profiles/$binary_name"
+    elif [ -f "$tmpdir/codexswitch-cli/$binary_name" ]; then
+        binary_path="$tmpdir/codexswitch-cli/$binary_name"
     else
         error "binary not found in archive (looking for $binary_name)"
     fi
@@ -314,7 +315,7 @@ usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
-Install codex-profiles by downloading the correct binary for your platform.
+Install codexswitch-cli by downloading the correct binary for your platform.
 
 Options:
   -v, --version VERSION    Install specific version (default: $(version_help_text))
@@ -322,9 +323,12 @@ Options:
   -h, --help               Show this help message
 
 Environment variables:
-  CODEX_PROFILES_VERSION          Override auto-detected release version
-  CODEX_PROFILES_INSTALL_DIR      Override default install directory
-  CODEX_PROFILES_ALLOW_INSECURE_INSTALL  Set to 1 to bypass checksum requirement
+  CODEXSWITCH_CLI_VERSION          Override auto-detected release version
+  CODEXSWITCH_CLI_INSTALL_DIR      Override default install directory
+  CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL  Set to 1 to bypass checksum requirement
+  CODEX_PROFILES_VERSION           Legacy alias for CODEXSWITCH_CLI_VERSION
+  CODEX_PROFILES_INSTALL_DIR       Legacy alias for CODEXSWITCH_CLI_INSTALL_DIR
+  CODEX_PROFILES_ALLOW_INSECURE_INSTALL  Legacy alias for CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL
   NO_COLOR                        Disable colored output
 
 Security:

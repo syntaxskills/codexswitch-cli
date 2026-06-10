@@ -15,10 +15,10 @@ use crate::{
 
 // We use the latest version from the cask if installation is via homebrew - homebrew does not immediately pick up the latest release and can lag behind.
 const HOMEBREW_CASK_URL: &str =
-    "https://raw.githubusercontent.com/Homebrew/homebrew-cask/HEAD/Casks/c/codex-profiles.rb";
+    "https://raw.githubusercontent.com/Homebrew/homebrew-cask/HEAD/Casks/c/codexswitch-cli.rb";
 const LATEST_RELEASE_URL: &str =
-    "https://api.github.com/repos/midhunmonachan/codex-profiles/releases/latest";
-const RELEASE_NOTES_URL: &str = "https://github.com/midhunmonachan/codex-profiles/releases/latest";
+    "https://api.github.com/repos/syntaxskills/codexswitch-cli/releases/latest";
+const RELEASE_NOTES_URL: &str = "https://github.com/syntaxskills/codexswitch-cli/releases/latest";
 #[cfg(test)]
 const HOMEBREW_CASK_URL_OVERRIDE_ENV_VAR: &str = "CODEX_PROFILES_HOMEBREW_CASK_URL";
 #[cfg(test)]
@@ -27,11 +27,11 @@ const LATEST_RELEASE_URL_OVERRIDE_ENV_VAR: &str = "CODEX_PROFILES_LATEST_RELEASE
 /// Update action the CLI should perform after the prompt exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateAction {
-    /// Update via `npm install -g codex-profiles`.
+    /// Update via `npm install -g codexswitch-cli`.
     NpmGlobalLatest,
-    /// Update via `bun install -g codex-profiles`.
+    /// Update via `bun install -g codexswitch-cli`.
     BunGlobalLatest,
-    /// Update via `brew upgrade codex-profiles`.
+    /// Update via `brew upgrade codexswitch-cli`.
     BrewUpgrade,
 }
 
@@ -47,9 +47,9 @@ impl UpdateAction {
     /// Returns the list of command-line arguments for invoking the update.
     pub fn command_args(self) -> (&'static str, &'static [&'static str]) {
         match self {
-            UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "codex-profiles"]),
-            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "codex-profiles"]),
-            UpdateAction::BrewUpgrade => ("brew", &["upgrade", "codex-profiles"]),
+            UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "codexswitch-cli"]),
+            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "codexswitch-cli"]),
+            UpdateAction::BrewUpgrade => ("brew", &["upgrade", "codexswitch-cli"]),
         }
     }
 
@@ -63,8 +63,12 @@ impl UpdateAction {
 
 pub fn detect_install_source() -> InstallSource {
     let exe = std::env::current_exe().unwrap_or_default();
-    let managed_by_npm = std::env::var_os("CODEX_PROFILES_MANAGED_BY_NPM").is_some();
-    let managed_by_bun = std::env::var_os("CODEX_PROFILES_MANAGED_BY_BUN").is_some();
+    let managed_by_npm = std::env::var_os("CODEXSWITCH_CLI_MANAGED_BY_NPM")
+        .or_else(|| std::env::var_os("CODEX_PROFILES_MANAGED_BY_NPM"))
+        .is_some();
+    let managed_by_bun = std::env::var_os("CODEXSWITCH_CLI_MANAGED_BY_BUN")
+        .or_else(|| std::env::var_os("CODEX_PROFILES_MANAGED_BY_BUN"))
+        .is_some();
     detect_install_source_inner(
         cfg!(target_os = "macos"),
         &exe,
@@ -105,7 +109,7 @@ fn is_bun_install(current_exe: &std::path::Path) -> bool {
 
 fn is_brew_install(current_exe: &std::path::Path) -> bool {
     (current_exe.starts_with("/opt/homebrew") || current_exe.starts_with("/usr/local"))
-        && current_exe.file_name().and_then(|name| name.to_str()) == Some("codex-profiles")
+        && current_exe.file_name().and_then(|name| name.to_str()) == Some("codexswitch-cli")
 }
 
 pub(crate) fn get_update_action() -> Option<UpdateAction> {
@@ -394,7 +398,7 @@ pub fn extract_version_from_latest_tag(latest_tag_name: &str) -> Result<String, 
 fn fetch_version_from_cask() -> Option<String> {
     let response = update_agent()
         .get(&homebrew_cask_url())
-        .header("User-Agent", "codex-profiles")
+        .header("User-Agent", "codexswitch-cli")
         .call();
     match response {
         Ok(mut resp) => {
@@ -409,7 +413,7 @@ fn fetch_version_from_cask() -> Option<String> {
 fn fetch_version_from_release() -> Option<String> {
     let response = update_agent()
         .get(&latest_release_url())
-        .header("User-Agent", "codex-profiles")
+        .header("User-Agent", "codexswitch-cli")
         .call();
     match response {
         Ok(mut resp) => {
@@ -607,7 +611,7 @@ mod tests {
 
     #[test]
     fn detect_install_source_inner_variants() {
-        let exe = PathBuf::from("/usr/local/bin/codex-profiles");
+        let exe = PathBuf::from("/usr/local/bin/codexswitch-cli");
         assert_eq!(
             detect_install_source_inner(true, &exe, false, false),
             InstallSource::Brew
@@ -622,7 +626,7 @@ mod tests {
         );
 
         let bun_exe = PathBuf::from(
-            "/Users/dev/.bun/install/global/node_modules/codex-profiles/bin/codex-profiles",
+            "/Users/dev/.bun/install/global/node_modules/codexswitch-cli/bin/codexswitch-cli",
         );
         assert_eq!(
             detect_install_source_inner(false, &bun_exe, false, true),
@@ -789,7 +793,7 @@ mod tests {
             .expect("update cache");
         assert!(cache.last_prompted_at.is_none());
         let output = String::from_utf8(output).expect("utf8 output");
-        assert!(output.contains("Run `npm install -g codex-profiles` to update."));
+        assert!(output.contains("Run `npm install -g codexswitch-cli` to update."));
 
         let dir = tempfile::tempdir().expect("tempdir");
         let config = UpdateConfig {

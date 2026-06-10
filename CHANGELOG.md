@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `status` now refreshes usage auth on `401` responses, syncs refreshed credentials back to the saved active profile when possible, and formats auth/usage HTTP errors in a Codex-style layout
 - `status --all --json` now returns a single `profiles` array that includes API-key and errored profiles, and human-readable output now uses "active profile" wording
 - top-level `--help` output now uses shorter examples, highlights `--json` support more clearly, and label subcommands now spell out the required `--label`/`--id` selector more clearly
-- the manual installer now resolves the latest published GitHub release automatically when no version is pinned, while still honoring `CODEX_PROFILES_VERSION` and `--version`
+- the manual installer now resolves the latest published GitHub release automatically when no version is pinned, while still honoring `CODEXSWITCH_CLI_VERSION` and `--version`
 - Cargo installs now require Rust 1.94 or newer
 - package and README metadata now describe the tool in terms of switching between multiple Codex accounts
 - status usage lookups now only allow official ChatGPT hosts or loopback addresses for `chatgpt_base_url`, and non-file Codex auth store modes are rejected
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - usage fetching now retries transient transport, `5xx`, and rate-limit failures more robustly and supports grouped multi-bucket usage limits
-- installer and release downloads now verify checksums from the tagged GitHub release by default, with a guarded insecure bypass for environments that explicitly set `CODEX_PROFILES_ALLOW_INSECURE_INSTALL=1`
+- installer and release downloads now verify checksums from the tagged GitHub release by default, with a guarded insecure bypass for environments that explicitly set `CODEXSWITCH_CLI_ALLOW_INSECURE_INSTALL=1`
 - npm and Bun update-source detection is more reliable
 - regular remote error output now uses aligned multiline blocks while JSON output preserves raw backend detail
 - errors always exit non-zero and write to stderr only; stdout is never polluted with partial JSON on error
@@ -78,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - Last-used timestamp tracking in `profiles.json` profile metadata
-- Legacy `cx` shorthand script (use `codex-profiles` directly)
+- Legacy `cx` shorthand script (use `codexswitch-cli` directly)
 
 ### Internal
 
@@ -127,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks for code quality
 - Binary releases for 5 platforms (Linux x64/ARM64, macOS Intel/Apple Silicon, Windows x64)
 
-[Unreleased]: https://github.com/midhunmonachan/codex-profiles/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/midhunmonachan/codex-profiles/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/midhunmonachan/codex-profiles/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/midhunmonachan/codex-profiles/releases/tag/v0.1.0
+[Unreleased]: https://github.com/syntaxskills/codexswitch-cli/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/syntaxskills/codexswitch-cli/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/syntaxskills/codexswitch-cli/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/syntaxskills/codexswitch-cli/releases/tag/v0.1.0

@@ -1,27 +1,29 @@
 {
-  "name": "codex-profiles",
+  "name": "codexswitch-cli",
   "version": "0.3.0",
   "description": "Seamlessly switch between multiple Codex accounts",
   "license": "MIT",
   "bin": {
-    "codex-profiles": "bin/codex-profiles.js"
+    "codexswitch-cli": "bin/codexswitch-cli.js",
+    "codexswitch": "bin/codexswitch-cli.js",
+    "codex-profiles": "bin/codexswitch-cli.js"
   },
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "optionalDependencies": {
-    "codex-profiles-darwin-arm64": "0.3.0",
-    "codex-profiles-darwin-x64": "0.3.0",
-    "codex-profiles-linux-arm64": "0.3.0",
-    "codex-profiles-linux-x64": "0.3.0",
-    "codex-profiles-win32-x64": "0.3.0"
+    "codexswitch-cli-darwin-arm64": "0.3.0",
+    "codexswitch-cli-darwin-x64": "0.3.0",
+    "codexswitch-cli-linux-arm64": "0.3.0",
+    "codexswitch-cli-linux-x64": "0.3.0",
+    "codexswitch-cli-win32-x64": "0.3.0"
   },
   "files": [
     "bin"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midhunmonachan/codex-profiles.git"
+    "url": "git+https://github.com/syntaxskills/codexswitch-cli.git"
   }
 }

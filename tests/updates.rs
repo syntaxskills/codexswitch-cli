@@ -21,7 +21,7 @@ fn detects_install_source_without_env_mutation() {
         detect_install_source_inner(
             false,
             std::path::Path::new(
-                "/Users/dev/.bun/install/global/node_modules/codex-profiles/bin/codex-profiles",
+                "/Users/dev/.bun/install/global/node_modules/codexswitch-cli/bin/codexswitch-cli",
             ),
             false,
             true,
@@ -31,7 +31,7 @@ fn detects_install_source_without_env_mutation() {
     assert_eq!(
         detect_install_source_inner(
             true,
-            std::path::Path::new("/opt/homebrew/bin/codex-profiles"),
+            std::path::Path::new("/opt/homebrew/bin/codexswitch-cli"),
             false,
             false,
         ),
@@ -40,7 +40,7 @@ fn detects_install_source_without_env_mutation() {
     assert_eq!(
         detect_install_source_inner(
             true,
-            std::path::Path::new("/usr/local/bin/codex-profiles"),
+            std::path::Path::new("/usr/local/bin/codexswitch-cli"),
             false,
             false,
         ),
@@ -51,7 +51,7 @@ fn detects_install_source_without_env_mutation() {
 #[test]
 fn parses_version_from_cask_contents() {
     let cask = r#"
-        cask "codex-profiles" do
+        cask "codexswitch-cli" do
           version "0.55.0"
         end
     "#;

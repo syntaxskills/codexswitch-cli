@@ -21,45 +21,45 @@ rm -rf "${out_dir}"
 mkdir -p "${out_dir}"
 
 shopt -s nullglob
-artifact_dirs=("${artifacts_dir}"/codex-profiles-*)
+artifact_dirs=("${artifacts_dir}"/codexswitch-cli-*)
 if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
   echo "No build artifacts found under ${artifacts_dir}" >&2
   exit 1
 fi
 
 for artifact_dir in "${artifact_dirs[@]}"; do
-  target="${artifact_dir##*/codex-profiles-}"
+  target="${artifact_dir##*/codexswitch-cli-}"
   pkg=""
   os=""
   cpu=""
-  bin_name="codex-profiles"
+  bin_name="codexswitch-cli"
 
   case "${target}" in
     x86_64-unknown-linux-gnu)
-      pkg="codex-profiles-linux-x64"
+      pkg="codexswitch-cli-linux-x64"
       os="linux"
       cpu="x64"
       ;;
     aarch64-unknown-linux-gnu)
-      pkg="codex-profiles-linux-arm64"
+      pkg="codexswitch-cli-linux-arm64"
       os="linux"
       cpu="arm64"
       ;;
     x86_64-apple-darwin)
-      pkg="codex-profiles-darwin-x64"
+      pkg="codexswitch-cli-darwin-x64"
       os="darwin"
       cpu="x64"
       ;;
     aarch64-apple-darwin)
-      pkg="codex-profiles-darwin-arm64"
+      pkg="codexswitch-cli-darwin-arm64"
       os="darwin"
       cpu="arm64"
       ;;
     x86_64-pc-windows-msvc)
-      pkg="codex-profiles-win32-x64"
+      pkg="codexswitch-cli-win32-x64"
       os="win32"
       cpu="x64"
-      bin_name="codex-profiles.exe"
+      bin_name="codexswitch-cli.exe"
       ;;
     *)
       echo "Skipping unsupported target ${target}" >&2
@@ -86,10 +86,10 @@ for artifact_dir in "${artifact_dirs[@]}"; do
   "os": ["${os}"],
   "cpu": ["${cpu}"],
   "files": ["bin"],
-  "description": "Prebuilt native binary for Codex Profiles",
+  "description": "Prebuilt native binary for CodexSwitch CLI",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midhunmonachan/codex-profiles.git"
+    "url": "git+https://github.com/syntaxskills/codexswitch-cli.git"
   }
 }
 JSON

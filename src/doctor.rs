@@ -443,7 +443,7 @@ fn inspect_current_profile(
             None => Check::new(
                 Level::Warn,
                 "active profile",
-                "not saved (run `codex-profiles save`)",
+                "not saved (run `codexswitch-cli save`)",
             ),
         },
     }

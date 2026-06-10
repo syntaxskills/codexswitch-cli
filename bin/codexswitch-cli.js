@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Unified entry point for Codex Profiles.
+// Unified entry point for CodexSwitch CLI.
 
 import { spawn } from "node:child_process";
 import { existsSync } from "fs";
@@ -15,11 +15,11 @@ const { platform, arch } = process;
 const require = createRequire(import.meta.url);
 
 const PLATFORM_PACKAGES = {
-  "linux-x64": "codex-profiles-linux-x64",
-  "linux-arm64": "codex-profiles-linux-arm64",
-  "darwin-x64": "codex-profiles-darwin-x64",
-  "darwin-arm64": "codex-profiles-darwin-arm64",
-  "win32-x64": "codex-profiles-win32-x64",
+  "linux-x64": "codexswitch-cli-linux-x64",
+  "linux-arm64": "codexswitch-cli-linux-arm64",
+  "darwin-x64": "codexswitch-cli-darwin-x64",
+  "darwin-arm64": "codexswitch-cli-darwin-arm64",
+  "win32-x64": "codexswitch-cli-win32-x64",
 };
 
 const platformKey = `${platform}-${arch}`;
@@ -39,7 +39,7 @@ try {
 
 const packageDir = path.dirname(packageJsonPath);
 const codexBinaryName =
-  process.platform === "win32" ? "codex-profiles.exe" : "codex-profiles";
+  process.platform === "win32" ? "codexswitch-cli.exe" : "codexswitch-cli";
 const binaryPath = path.join(packageDir, "bin", codexBinaryName);
 if (!existsSync(binaryPath)) {
   throw new Error(
@@ -71,11 +71,17 @@ function detectPackageManager(packageDirectory) {
 }
 
 const env = { ...process.env };
-const packageManagerEnvVar =
-  detectPackageManager(packageDir) === "bun"
-    ? "CODEX_PROFILES_MANAGED_BY_BUN"
-    : "CODEX_PROFILES_MANAGED_BY_NPM";
-env[packageManagerEnvVar] = "1";
+const packageManager = detectPackageManager(packageDir);
+const packageManagerEnvVars =
+  packageManager === "bun"
+    ? ["CODEXSWITCH_CLI_MANAGED_BY_BUN", "CODEX_PROFILES_MANAGED_BY_BUN"]
+    : ["CODEXSWITCH_CLI_MANAGED_BY_NPM", "CODEX_PROFILES_MANAGED_BY_NPM"];
+for (const name of packageManagerEnvVars) {
+  env[name] = "1";
+}
+if (!env.CODEXSWITCH_CLI_COMMAND && invokedName) {
+  env.CODEXSWITCH_CLI_COMMAND = invokedName;
+}
 if (!env.CODEX_PROFILES_COMMAND && invokedName) {
   env.CODEX_PROFILES_COMMAND = invokedName;
 }

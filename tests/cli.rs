@@ -36,7 +36,7 @@ struct TestEnv {
 impl TestEnv {
     fn new() -> Self {
         let home = tempfile::Builder::new()
-            .prefix("codex-profiles-test-")
+            .prefix("codexswitch-cli-test-")
             .tempdir()
             .expect("create temp home");
         fs::create_dir_all(home.path().join(".codex")).expect("create codex dir");
@@ -193,9 +193,9 @@ impl TestEnv {
         let mut cmd = Command::new(&self.bin_path);
         cmd.args(args)
             .env("HOME", self.home_path())
-            .env("CODEX_PROFILES_HOME", self.home_path())
-            .env("CODEX_PROFILES_COMMAND", "codex-profiles")
-            .env("CODEX_PROFILES_SKIP_UPDATE", "1")
+            .env("CODEXSWITCH_CLI_HOME", self.home_path())
+            .env("CODEXSWITCH_CLI_COMMAND", "codexswitch-cli")
+            .env("CODEXSWITCH_CLI_SKIP_UPDATE", "1")
             .env("NO_COLOR", "1")
             .env("LANG", "C")
             .env("LC_ALL", "C")
@@ -286,7 +286,7 @@ fn read_json_file(path: &PathBuf) -> serde_json::Value {
 }
 
 fn resolve_bin_path() -> PathBuf {
-    if let Ok(path) = env::var("CARGO_BIN_EXE_codex-profiles") {
+    if let Ok(path) = env::var("CARGO_BIN_EXE_codexswitch-cli") {
         let path = PathBuf::from(path);
         if path.exists() {
             return path;
@@ -298,9 +298,9 @@ fn resolve_bin_path() -> PathBuf {
         .and_then(|path| path.parent())
         .expect("target dir");
     let bin_name = if cfg!(windows) {
-        "codex-profiles.exe"
+        "codexswitch-cli.exe"
     } else {
-        "codex-profiles"
+        "codexswitch-cli"
     };
     target_dir.join(bin_name)
 }
@@ -1025,7 +1025,7 @@ fn ui_doctor_reports_unsaved_current_profile() {
     let output = env.run(&["doctor"]);
     assert!(output.contains("[ok] auth file: valid"));
     assert!(output.contains("[ok] saved profiles: 0 valid, 0 invalid"));
-    assert!(output.contains("[warn] active profile: not saved (run `codex-profiles save`)"));
+    assert!(output.contains("[warn] active profile: not saved (run `codexswitch-cli save`)"));
 }
 
 #[test]
@@ -1594,7 +1594,7 @@ fn ui_list_command() {
     assert!(output.contains("current@example.com"));
     assert!(output.contains("<- active"));
     assert!(output.contains("Warning: This profile is not saved yet."));
-    assert!(output.contains("Run `codex-profiles save` to save this profile."));
+    assert!(output.contains("Run `codexswitch-cli save` to save this profile."));
     assert!(output.contains("alpha@example.com"));
     assert!(output.contains("beta@example.com"));
     assert_order(&output, "current@example.com", "alpha@example.com");
@@ -1710,7 +1710,7 @@ fn ui_label_set_help_shows_exactly_one_selector() {
 
     assert!(
         help.contains(
-            "Usage: codex-profiles label set [OPTIONS] --to <label> (--label <label> | --id <profile-id>)"
+            "Usage: codexswitch-cli label set [OPTIONS] --to <label> (--label <label> | --id <profile-id>)"
         )
     );
     assert!(help.contains("--label <label>"));
@@ -1725,7 +1725,7 @@ fn ui_label_set_missing_selector_has_clear_error() {
 
     assert!(err.contains("exactly one of `--label <label>` or `--id <profile-id>` is required"));
     assert!(err.contains(
-        "Usage: codex-profiles label set [OPTIONS] --to <label> (--label <label> | --id <profile-id>)"
+        "Usage: codexswitch-cli label set [OPTIONS] --to <label> (--label <label> | --id <profile-id>)"
     ));
 }
 
@@ -1736,7 +1736,7 @@ fn ui_label_clear_missing_selector_has_clear_error() {
 
     assert!(err.contains("exactly one of `--label <label>` or `--id <profile-id>` is required"));
     assert!(err.contains(
-        "Usage: codex-profiles label clear [OPTIONS] (--label <label> | --id <profile-id>)"
+        "Usage: codexswitch-cli label clear [OPTIONS] (--label <label> | --id <profile-id>)"
     ));
 }
 
@@ -1761,7 +1761,7 @@ fn ui_list_unsaved_free_profile_shows_warning() {
     let output = env.run(&["list"]);
     assert!(output.contains(FREE_EMAIL));
     assert!(output.contains("Warning: This profile is not saved yet."));
-    assert!(output.contains("Run `codex-profiles save` to save this profile."));
+    assert!(output.contains("Run `codexswitch-cli save` to save this profile."));
 }
 
 #[test]
@@ -1913,7 +1913,7 @@ fn ui_status_json_unsaved_current_profile() {
     assert!(
         warnings
             .iter()
-            .any(|value| value == "Run `codex-profiles save` to save this profile.")
+            .any(|value| value == "Run `codexswitch-cli save` to save this profile.")
     );
 }
 
@@ -2412,7 +2412,7 @@ fn ui_status_all_unsaved_free_profile_shows_warning() {
     let output = env.run(&["status", "--all"]);
     assert!(output.contains(FREE_EMAIL));
     assert!(output.contains("Warning: This profile is not saved yet."));
-    assert!(output.contains("Run `codex-profiles save` to save this profile."));
+    assert!(output.contains("Run `codexswitch-cli save` to save this profile."));
     let _ = usage_handle.join();
 }
 
@@ -2903,9 +2903,9 @@ fn json_mutating_command_error_exits_nonzero_no_json_on_stdout() {
     let output = std::process::Command::new(&env.bin_path)
         .args(["delete", "--label", "nonexistent", "--yes", "--json"])
         .env("HOME", env.home_path())
-        .env("CODEX_PROFILES_HOME", env.home_path())
-        .env("CODEX_PROFILES_COMMAND", "codex-profiles")
-        .env("CODEX_PROFILES_SKIP_UPDATE", "1")
+        .env("CODEXSWITCH_CLI_HOME", env.home_path())
+        .env("CODEXSWITCH_CLI_COMMAND", "codexswitch-cli")
+        .env("CODEXSWITCH_CLI_SKIP_UPDATE", "1")
         .env("NO_COLOR", "1")
         .env("LANG", "C")
         .env("LC_ALL", "C")

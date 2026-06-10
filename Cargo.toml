@@ -1,13 +1,13 @@
 [package]
-name = "codex-profiles"
+name = "codexswitch-cli"
 version = "0.3.0"
 edition = "2024"
 rust-version = "1.94"
 license = "MIT"
 description = "Seamlessly switch between multiple Codex accounts"
-repository = "https://github.com/midhunmonachan/codex-profiles"
-homepage = "https://github.com/midhunmonachan/codex-profiles"
-documentation = "https://docs.rs/codex-profiles"
+repository = "https://github.com/syntaxskills/codexswitch-cli"
+homepage = "https://github.com/syntaxskills/codexswitch-cli"
+documentation = "https://docs.rs/codexswitch-cli"
 readme = "README.md"
 keywords = ["codex", "cli", "profile", "auth", "openai"]
 categories = ["command-line-utilities", "authentication"]
@@ -22,6 +22,9 @@ exclude = [
     "coverage/",
     "lcov.info",
 ]
+
+[lib]
+name = "codex_profiles"
 
 [dependencies]
 base64 = "0.22"

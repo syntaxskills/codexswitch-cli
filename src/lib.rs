@@ -29,6 +29,10 @@ fn run_cli_with_args(args: Vec<std::ffi::OsString>) -> Result<(), String> {
                 println!();
                 return Ok(());
             }
+            if err.kind() == ErrorKind::DisplayVersion {
+                let _ = err.print();
+                return Ok(());
+            }
             return Err(err.to_string());
         }
     };
@@ -57,7 +61,9 @@ fn run(cli: Cli) -> Result<(), String> {
     let is_doctor = matches!(&cli.command, Commands::Doctor { .. });
     if !is_doctor {
         ensure_paths(&paths)?;
-        let check_for_update_on_startup = std::env::var_os("CODEX_PROFILES_SKIP_UPDATE").is_none();
+        let check_for_update_on_startup = std::env::var_os("CODEXSWITCH_CLI_SKIP_UPDATE")
+            .or_else(|| std::env::var_os("CODEX_PROFILES_SKIP_UPDATE"))
+            .is_none();
         let update_config = UpdateConfig {
             codex_home: paths.codex.clone(),
             check_for_update_on_startup,
@@ -166,19 +172,28 @@ mod tests {
 
     #[test]
     fn run_cli_with_args_help() {
-        let args = vec![OsString::from("codex-profiles")];
+        let args = vec![OsString::from("codexswitch-cli")];
         run_cli_with_args(args).unwrap();
     }
 
     #[test]
     fn run_cli_with_args_display_help() {
-        let args = vec![OsString::from("codex-profiles"), OsString::from("--help")];
+        let args = vec![OsString::from("codexswitch-cli"), OsString::from("--help")];
+        run_cli_with_args(args).unwrap();
+    }
+
+    #[test]
+    fn run_cli_with_args_display_version() {
+        let args = vec![
+            OsString::from("codexswitch-cli"),
+            OsString::from("--version"),
+        ];
         run_cli_with_args(args).unwrap();
     }
 
     #[test]
     fn run_cli_with_args_errors() {
-        let args = vec![OsString::from("codex-profiles"), OsString::from("nope")];
+        let args = vec![OsString::from("codexswitch-cli"), OsString::from("nope")];
         let err = run_cli_with_args(args).unwrap_err();
         assert!(err.contains("error"));
     }
@@ -209,8 +224,8 @@ mod tests {
         let paths = make_paths(dir.path());
         fs::create_dir_all(&paths.profiles).unwrap();
         let home = dir.path().to_string_lossy().into_owned();
-        let _home = set_env_guard("CODEX_PROFILES_HOME", Some(&home));
-        let _skip = set_env_guard("CODEX_PROFILES_SKIP_UPDATE", Some("1"));
+        let _home = set_env_guard("CODEXSWITCH_CLI_HOME", Some(&home));
+        let _skip = set_env_guard("CODEXSWITCH_CLI_SKIP_UPDATE", Some("1"));
         let cli = Cli {
             plain: true,
             json: false,

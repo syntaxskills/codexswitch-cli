@@ -59,23 +59,23 @@ sha256_file() {
 }
 
 shopt -s nullglob
-artifact_dirs=("${artifacts_dir}"/codex-profiles-*)
+artifact_dirs=("${artifacts_dir}"/codexswitch-cli-*)
 if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
   echo "No build artifacts found under ${artifacts_dir}" >&2
   exit 1
 fi
 
 for artifact_dir in "${artifact_dirs[@]}"; do
-  target="${artifact_dir##*/codex-profiles-}"
-  binary="codex-profiles"
+  target="${artifact_dir##*/codexswitch-cli-}"
+  binary="codexswitch-cli"
   if [[ "${target}" == *windows* ]]; then
-    binary="codex-profiles.exe"
+    binary="codexswitch-cli.exe"
   fi
 
   if [[ "${target}" == *windows* ]]; then
-    (cd "${artifact_dir}" && zip -j "${release_dir}/codex-profiles-${target}.exe.zip" "${binary}")
+    (cd "${artifact_dir}" && zip -j "${release_dir}/codexswitch-cli-${target}.exe.zip" "${binary}")
   else
-    tar -C "${artifact_dir}" -czf "${release_dir}/codex-profiles-${target}.tar.gz" "${binary}"
+    tar -C "${artifact_dir}" -czf "${release_dir}/codexswitch-cli-${target}.tar.gz" "${binary}"
   fi
 done
 
@@ -91,37 +91,37 @@ done
 npm pack --pack-destination "${npm_packages_dir}"
 
 cargo package --locked
-crate_path="target/package/codex-profiles-${version}.crate"
+crate_path="target/package/codexswitch-cli-${version}.crate"
 if [[ ! -f "${crate_path}" ]]; then
   echo "Missing crate package at ${crate_path}" >&2
   exit 1
 fi
 cp "${crate_path}" "${cargo_dir}/"
 
-darwin_x64="${release_dir}/codex-profiles-x86_64-apple-darwin.tar.gz"
-darwin_arm="${release_dir}/codex-profiles-aarch64-apple-darwin.tar.gz"
+darwin_x64="${release_dir}/codexswitch-cli-x86_64-apple-darwin.tar.gz"
+darwin_arm="${release_dir}/codexswitch-cli-aarch64-apple-darwin.tar.gz"
 if [[ -f "${darwin_x64}" && -f "${darwin_arm}" ]]; then
   darwin_x64_sha="$(sha256_file "${darwin_x64}")"
   darwin_arm_sha="$(sha256_file "${darwin_arm}")"
-  cat > "${homebrew_dir}/codex-profiles.rb" <<EOF
-cask "codex-profiles" do
+  cat > "${homebrew_dir}/codexswitch-cli.rb" <<EOF
+cask "codexswitch-cli" do
   version "${version}"
 
   on_arm do
     sha256 "${darwin_arm_sha}"
-    url "https://github.com/midhunmonachan/codex-profiles/releases/download/v#{version}/codex-profiles-aarch64-apple-darwin.tar.gz"
+    url "https://github.com/syntaxskills/codexswitch-cli/releases/download/v#{version}/codexswitch-cli-aarch64-apple-darwin.tar.gz"
   end
 
   on_intel do
     sha256 "${darwin_x64_sha}"
-    url "https://github.com/midhunmonachan/codex-profiles/releases/download/v#{version}/codex-profiles-x86_64-apple-darwin.tar.gz"
+    url "https://github.com/syntaxskills/codexswitch-cli/releases/download/v#{version}/codexswitch-cli-x86_64-apple-darwin.tar.gz"
   end
 
-  name "Codex Profiles"
+  name "CodexSwitch CLI"
   desc "Seamlessly switch between multiple Codex accounts"
-  homepage "https://github.com/midhunmonachan/codex-profiles"
+  homepage "https://github.com/syntaxskills/codexswitch-cli"
 
-  binary "codex-profiles"
+  binary "codexswitch-cli"
 end
 EOF
 else
@@ -153,7 +153,7 @@ done
 shopt -u nullglob
 
 manifest_file="${checksums_dir}/release-manifest.json"
-repository="${GITHUB_REPOSITORY:-midhunmonachan/codex-profiles}"
+repository="${GITHUB_REPOSITORY:-syntaxskills/codexswitch-cli}"
 repository_url="https://github.com/${repository}"
 commit_sha="$(git rev-parse HEAD 2>/dev/null || true)"
 generated_at="$(python3 - <<'PY'

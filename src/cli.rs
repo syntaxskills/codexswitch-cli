@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn examples_root_uses_clear_professional_headings() {
-        let text = examples_root("codex-profiles");
+        let text = examples_root("codexswitch-cli");
         assert!(text.contains("Examples:"));
         assert!(text.contains("Use `--json` for machine-readable success output."));
         assert!(!text.contains("Common options:"));

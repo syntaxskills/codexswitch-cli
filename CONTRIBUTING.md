@@ -1,12 +1,12 @@
 # Contributing
 
-Thanks for helping improve Codex Profiles.
+Thanks for helping improve CodexSwitch CLI.
 
 ## Before You Start
 
 **For non-trivial changes (new features, significant refactors, breaking changes):**
 
-Please open an [issue](https://github.com/midhunmonachan/codex-profiles/issues) or [discussion](https://github.com/midhunmonachan/codex-profiles/discussions) first to:
+Please open an [issue](https://github.com/syntaxskills/codexswitch-cli/issues) or [discussion](https://github.com/syntaxskills/codexswitch-cli/discussions) first to:
 - Discuss your proposed changes
 - Get feedback on your approach
 - Confirm the feature/fix aligns with project goals
@@ -110,8 +110,8 @@ make release-tag ARGS="--bump patch"
 
 `--bump` also syncs npm `optionalDependencies` package versions. `install.sh`
 resolves the latest published release automatically, and you can still pin a
-specific version with `CODEX_PROFILES_VERSION` or `--version`.
+specific version with `CODEXSWITCH_CLI_VERSION` or `--version`.
 
 ## Questions?
 
-Not sure if your idea fits? Ask in [Discussions](https://github.com/midhunmonachan/codex-profiles/discussions) - we're happy to help!
+Not sure if your idea fits? Ask in [Discussions](https://github.com/syntaxskills/codexswitch-cli/discussions) - we're happy to help!

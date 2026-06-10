@@ -38,7 +38,9 @@ pub fn command_name() -> &'static str {
     static COMMAND_NAME: OnceLock<String> = OnceLock::new();
     COMMAND_NAME
         .get_or_init(|| {
-            let env_value = env::var("CODEX_PROFILES_COMMAND").ok();
+            let env_value = env::var("CODEXSWITCH_CLI_COMMAND")
+                .ok()
+                .or_else(|| env::var("CODEX_PROFILES_COMMAND").ok());
             compute_command_name_from(env_value, env::args_os())
         })
         .as_str()
@@ -62,11 +64,11 @@ where
                 .map(|name| name.to_string())
         })
         .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| "codex-profiles".to_string())
+        .unwrap_or_else(|| "codexswitch-cli".to_string())
 }
 
 pub fn package_command_name() -> &'static str {
-    "codex-profiles"
+    "codexswitch-cli"
 }
 
 #[cfg(unix)]
@@ -116,7 +118,9 @@ pub fn resolve_paths() -> Result<Paths, String> {
 }
 
 fn resolve_home_dir() -> Option<PathBuf> {
-    let codex_home = env::var_os("CODEX_PROFILES_HOME").map(PathBuf::from);
+    let codex_home = env::var_os("CODEXSWITCH_CLI_HOME")
+        .or_else(|| env::var_os("CODEX_PROFILES_HOME"))
+        .map(PathBuf::from);
     let base_home = BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
     let home = env::var_os("HOME").map(PathBuf::from);
     let userprofile = env::var_os("USERPROFILE").map(PathBuf::from);
@@ -687,9 +691,9 @@ mod tests {
 
     #[test]
     fn compute_command_name_uses_args() {
-        let args = vec![OsString::from("/usr/bin/codex-profiles")];
+        let args = vec![OsString::from("/usr/bin/codexswitch-cli")];
         let name = compute_command_name_from(None, args.into_iter());
-        assert_eq!(name, "codex-profiles");
+        assert_eq!(name, "codexswitch-cli");
     }
 
     #[test]
@@ -702,7 +706,7 @@ mod tests {
     #[test]
     fn compute_command_name_fallback() {
         let name = compute_command_name_from(None, Vec::new().into_iter());
-        assert_eq!(name, "codex-profiles");
+        assert_eq!(name, "codexswitch-cli");
     }
 
     #[test]
