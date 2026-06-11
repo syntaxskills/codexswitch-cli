@@ -130,7 +130,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: codexswitch-cli
-          - runner: macos-15-large
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             binary: codexswitch-cli
           - runner: macos-15
