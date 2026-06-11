@@ -1,6 +1,6 @@
 <h1 align="center">CodexSwitch CLI</h1>
 
-<p align="center">Fast, lightweight, safe switching for multiple Codex accounts.</p>
+<p align="center">Ultra-fast, cross-platform profile switching for ChatGPT, Codex, and third-party providers.</p>
 
 <p align="center">
   <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/syntaxskills/codexswitch-cli/tests.yml?branch=main&label=tests" alt="Tests" /></a>

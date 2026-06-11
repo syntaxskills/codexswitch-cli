@@ -118,7 +118,7 @@ cask "codexswitch-cli" do
   end
 
   name "CodexSwitch CLI"
-  desc "Seamlessly switch between multiple Codex accounts"
+  desc "Ultra-fast, cross-platform profile switching for ChatGPT, Codex, and third-party providers"
   homepage "https://github.com/syntaxskills/codexswitch-cli"
 
   binary "codexswitch-cli"
