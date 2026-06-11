@@ -1,10 +1,10 @@
 [package]
 name = "codexswitch-cli"
-version = "0.3.2"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.94"
 license = "MIT"
-description = "Seamlessly switch between multiple Codex accounts"
+description = "Fast, lightweight, safe switching for multiple Codex accounts"
 repository = "https://github.com/syntaxskills/codexswitch-cli"
 homepage = "https://github.com/syntaxskills/codexswitch-cli"
 documentation = "https://docs.rs/codexswitch-cli"

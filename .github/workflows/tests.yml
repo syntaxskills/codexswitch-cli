@@ -15,6 +15,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        continue-on-error: true
+        with:
+          shared-key: ${{ runner.os }}-lint-${{ hashFiles('rust-toolchain.toml') }}
+
+      - name: Run lint checks
+        run: scripts/check.sh --lint-only
+
   tests:
     name: tests-${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -52,4 +75,4 @@ jobs:
           tool: cargo-nextest@0.9.129
 
       - name: Run checks
-        run: scripts/check.sh --no-audit
+        run: scripts/check.sh --tests-only

@@ -7,7 +7,6 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -25,8 +24,6 @@ const FREE_ACCOUNT: &str = "acct-free";
 const FREE_EMAIL: &str = "free@example.com";
 const FREE_PLAN: &str = "free";
 const FREE_TOKEN: &str = "token-free";
-
-static COMMAND_MUTEX: Mutex<()> = Mutex::new(());
 
 struct TestEnv {
     home: tempfile::TempDir,
@@ -46,11 +43,18 @@ impl TestEnv {
         fs::create_dir_all(&bin_dir).expect("create test bin dir");
         let bin_name = source_bin.file_name().expect("binary file name");
         let bin_path = bin_dir.join(bin_name);
-        fs::copy(&source_bin, &bin_path).expect("copy test binary");
-        let permissions = fs::metadata(&source_bin)
-            .expect("source binary metadata")
-            .permissions();
-        fs::set_permissions(&bin_path, permissions).expect("set test binary permissions");
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&source_bin, &bin_path).expect("link test binary");
+        }
+        #[cfg(not(unix))]
+        {
+            fs::copy(&source_bin, &bin_path).expect("copy test binary");
+            let permissions = fs::metadata(&source_bin)
+                .expect("source binary metadata")
+                .permissions();
+            fs::set_permissions(&bin_path, permissions).expect("set test binary permissions");
+        }
 
         Self { home, bin_path }
     }
@@ -215,7 +219,6 @@ impl TestEnv {
     }
 
     fn run_output_with_env(&self, args: &[&str], extra_env: &[(&str, &str)]) -> Output {
-        let _guard = COMMAND_MUTEX.lock().expect("command mutex");
         let mut cmd = Command::new(&self.bin_path);
         cmd.args(args)
             .env("HOME", self.home_path())
@@ -465,13 +468,14 @@ fn start_response_server(
                     }
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    // Give parallel tests enough time to acquire the command
-                    // mutex and issue their first request on slower CI hosts.
-                    // Keep post-request timeout shorter to avoid hangs.
+                    // Give parallel tests enough time to issue their first
+                    // request on slower CI hosts. After a request has arrived,
+                    // keep the idle window short so server joins do not
+                    // dominate integration-test time.
                     let idle_timeout = if handled == 0 {
                         Duration::from_secs(60)
                     } else {
-                        Duration::from_secs(10)
+                        Duration::from_secs(1)
                     };
                     if last_activity.elapsed() > idle_timeout {
                         break;
@@ -625,6 +629,7 @@ fn ui_save_command() {
     assert!(output.contains("Saved profile"));
     assert!(output.contains("alpha@example.com"));
     assert!(output.contains("[files: auth.json]"));
+    assert!(output.contains("\n [files: auth.json]"));
     let id = profile_id_by_label(&env, "alpha");
     assert_snowflake_id(&id);
     let profile_path = profile_auth_path(&env, &id);
@@ -641,6 +646,7 @@ fn ui_save_include_config_stores_sidecar_and_metadata() {
 
     assert!(output.contains("Saved profile"));
     assert!(output.contains("[files: auth.json + config.toml]"));
+    assert!(output.contains("\n [files: auth.json + config.toml]"));
     let id = profile_id_by_label(&env, "alpha");
     assert_snowflake_id(&id);
     let profile_path = profile_auth_path(&env, &id);
@@ -1612,6 +1618,7 @@ fn ui_load_command() {
     assert!(output.contains("Loaded profile"));
     assert!(output.contains("beta@example.com"));
     assert!(output.contains("[files: auth.json]"));
+    assert!(output.contains("\n [files: auth.json]"));
     assert!(env.read_auth().contains(BETA_ACCOUNT));
 }
 
@@ -1630,6 +1637,7 @@ fn ui_load_profile_with_config_restores_auth_and_config() {
 
     assert!(output.contains("Loaded profile"));
     assert!(output.contains("[files: auth.json + config.toml]"));
+    assert!(output.contains("\n [files: auth.json + config.toml]"));
     assert!(env.read_auth().contains(ALPHA_ACCOUNT));
     assert!(env.read_config().contains("alpha-provider.example"));
 }
