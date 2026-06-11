@@ -109,10 +109,6 @@ Auth files and export bundles contain secrets. Keep them private.
 - [Release verification](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/verification.md)
 - [Contributing](https://github.com/syntaxskills/codexswitch-cli/blob/main/CONTRIBUTING.md)
 
-## Acknowledgements
-
-This repository is inspired by [`midhunmonachan/codex-profiles`](https://github.com/midhunmonachan/codex-profiles).
-
 ## About SyntaxSkills
 
 SyntaxSkills hosts this repository to keep maintenance continuous and community-owned. The goal is not profit; it is to keep the tool maintained beyond any single person. Contributors and maintainers are welcome to join.

@@ -1,122 +1,62 @@
-# Contributing
+# Contributing to CodexSwitch CLI
 
-Thanks for helping improve CodexSwitch CLI.
+Thanks for helping improve CodexSwitch CLI. This project is a small Rust CLI for
+saving, loading, listing, importing, exporting, and inspecting local Codex auth
+profiles.
 
-## Before You Start
+## What Fits
 
-**For non-trivial changes (new features, significant refactors, breaking changes):**
+We welcome focused changes such as:
 
-Please open an [issue](https://github.com/syntaxskills/codexswitch-cli/issues) or [discussion](https://github.com/syntaxskills/codexswitch-cli/discussions) first to:
-- Discuss your proposed changes
-- Get feedback on your approach
-- Confirm the feature/fix aligns with project goals
-- Avoid spending time on work that might not be accepted
+- Bug fixes with tests.
+- Documentation and install-flow improvements.
+- Small CLI usability improvements.
+- Release, packaging, and CI fixes.
+- Safety improvements around profile storage and auth files.
 
-**For minor changes (bug fixes, typos, docs improvements):**
+Please open an issue or discussion first for new commands, storage format
+changes, auth/token handling changes, release workflow changes, or broad
+refactors.
 
-Feel free to open a PR directly.
+## Local Setup
 
-## What We're Looking For
+- Use the Rust toolchain from `rust-toolchain.toml`.
+- Use Node.js 20 or newer only if you touch npm packaging.
+- Run `make hooks` if you want the repo-managed Git hooks.
 
-**Contributions we welcome:**
-- Bug fixes with test coverage
-- Documentation improvements
-- Performance optimizations
-- New features that align with the project's scope (profile management)
-- Test coverage improvements
-- CI/CD enhancements
-
-**Out of scope:**
-- Features that duplicate Codex CLI functionality
-- Changes that compromise security (token handling, HTTPS enforcement)
-- Breaking changes without strong justification
-- Features that significantly increase complexity
-
-## Setup
-
-- Rust toolchain: `rustup show`
-- Node (for npm packaging)
-
-## Checks
-
-Run the same checks as the pre-commit hook:
+Before sending a PR, run:
 
 ```bash
 make precommit
 ```
 
-Other helpers:
+If you do not have every optional local tool installed, run the core checks:
 
 ```bash
-make fmt
-make clippy
-make test
-make coverage
+cargo fmt --all -- --check
+cargo clippy --all-targets --locked -- -D warnings
+cargo test --tests --locked
 ```
 
-## Pre-commit hook
+## Pull Requests
 
-Install the repo-managed hook wrapper (so updates are picked up automatically):
+- Keep each PR about one problem.
+- Explain what changed, why it changed, and how you tested it.
+- Add or update tests for behavior changes.
+- Update README or docs when commands, output, install behavior, or release
+  behavior changes.
+- Include terminal output or screenshots when the CLI experience changes.
 
-```bash
-make hooks
-```
+## Code Guidelines
 
-This writes lightweight wrappers in your configured Git hooks directory
-(respects `core.hooksPath`) that call the versioned hooks in `scripts/`
-before each commit and push.
+- Keep auth and token handling conservative.
+- Preserve compatibility with existing profiles and export bundles unless a
+  migration is discussed first.
+- Follow the existing Rust module style before adding new abstractions.
+- Avoid new runtime dependencies unless they clearly reduce risk or complexity.
+- Prefer actionable errors over silent fallback behavior.
 
-## Pull Request Guidelines
+## Releases
 
-**Before submitting:**
-- [ ] Run `make check` (or `make precommit`) - all checks must pass
-- [ ] Add tests for new features or bug fixes
-- [ ] Update documentation if behavior changes
-- [ ] Keep commits focused and atomic
-- [ ] Write clear commit messages
-
-**PR description should include:**
-- What problem does this solve?
-- How does it solve it?
-- Any breaking changes?
-- Testing done (manual + automated)
-
-**Review process:**
-- Maintainers will review within a few days
-- You may be asked to make changes
-- Once approved, maintainers will merge
-
-## Code Standards
-
-- **Rust edition 2024** - follow existing patterns
-- **90% minimum line coverage** - enforced via `make coverage`
-- **No type suppression** - avoid `as any`, `#[allow]` without justification
-- **Error handling** - proper `Result` types, no silent failures
-- **Security-first** - especially around token/auth handling
-
-## Release tag helper
-
-Create a validated release tag that matches `Cargo.toml` and `package.json`:
-
-```bash
-make release-tag
-```
-
-To bump and tag in one step:
-
-```bash
-make release-tag ARGS="--bump patch"
-```
-
-`--bump` also syncs npm `optionalDependencies` package versions. `install.sh`
-resolves the latest published release automatically, and you can still pin a
-specific version with `CODEXSWITCH_CLI_VERSION` or `--version`.
-
-GitHub releases are built from `v*` tags. crates.io publishing is skipped unless
-`CARGO_REGISTRY_TOKEN` is configured. npm publishing is skipped unless the repo
-variable `NPM_PUBLISH` is set to `true` and trusted publishing has been
-configured for the npm packages.
-
-## Questions?
-
-Not sure if your idea fits? Ask in [Discussions](https://github.com/syntaxskills/codexswitch-cli/discussions) - we're happy to help!
+Releases are built from `v*` tags by GitHub Actions. Maintainers handle
+publishing. Do not move a published tag.
