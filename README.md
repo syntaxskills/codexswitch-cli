@@ -26,13 +26,6 @@ codexswitch-cli --version
 codexswitch-cli list
 ```
 
-The npm package also installs these aliases:
-
-```bash
-codexswitch
-codex-profiles
-```
-
 ### Other Install Options
 
 Install the latest GitHub release directly:

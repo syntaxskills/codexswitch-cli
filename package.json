@@ -4,9 +4,7 @@
   "description": "Fast, lightweight, safe switching for multiple Codex accounts",
   "license": "MIT",
   "bin": {
-    "codexswitch-cli": "bin/codexswitch-cli.js",
-    "codexswitch": "bin/codexswitch-cli.js",
-    "codex-profiles": "bin/codexswitch-cli.js"
+    "codexswitch-cli": "bin/codexswitch-cli.js"
   },
   "type": "module",
   "engines": {
