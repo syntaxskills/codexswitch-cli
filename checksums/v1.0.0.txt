@@ -1,0 +1,13 @@
+f68df1d169d80bf6ad611682a665a7a5613018566c0e76d7f8abdc29df3ab77c  codexswitch-cli-aarch64-apple-darwin.tar.gz
+f347debc07e3be8bc47b6916f0cfa07b79afdd35624d016eceaecfbdebc0f792  codexswitch-cli-aarch64-unknown-linux-gnu.tar.gz
+3870364043697fb7589913e4a7e3e9bde8b9d807919e7372c5bcfdf965198738  codexswitch-cli-x86_64-apple-darwin.tar.gz
+e307365d72f51040e503943c6cc4a43b7608a22496bc102d9711d4eaddeb26fc  codexswitch-cli-x86_64-pc-windows-msvc.exe.zip
+98d6908097fdb0c836b8ad3e59a09bcb24ccc35409fa7b40cc56386a6b3fdce4  codexswitch-cli-x86_64-unknown-linux-gnu.tar.gz
+0321b7e79cbdc372f35d17fd621783fcbf75f7985dfe39a8694b562b2c094269  codexswitch-cli-1.0.0.tgz
+e2809df3dc982d361fdbc845662d046a98620621c7d7e7a2fcb86fe1428db101  codexswitch-cli-darwin-arm64-1.0.0.tgz
+136907d67e6f7a4784636e236a499f8897ea2f3fa865aa07c46b706835445a11  codexswitch-cli-darwin-x64-1.0.0.tgz
+d13e47e7e395adac1976d1a0a114ee2aaa8cda65e1e2db4e443b0d6b83aaef7d  codexswitch-cli-linux-arm64-1.0.0.tgz
+3e976a93a2b1e7bcc29eecafd0d3d1540132f10464f21985be88e8b4240d46e2  codexswitch-cli-linux-x64-1.0.0.tgz
+963aa87fc4dce2c6f947872acc5ed05aa38197aa91e02719a8fe648ea3575e94  codexswitch-cli-win32-x64-1.0.0.tgz
+29a12850bb08704cc7395b95c56d1727d125b5111f427072127885f41d52b16d  codexswitch-cli-1.0.0.crate
+560f98cfbf7e944bb175f77ad0adb249b114ee89b0e9f0d6d80aa11a2d9cad5c  codexswitch-cli.rb
