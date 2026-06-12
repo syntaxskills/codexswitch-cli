@@ -36,27 +36,27 @@ for artifact_dir in "${artifact_dirs[@]}"; do
 
   case "${target}" in
     x86_64-unknown-linux-gnu)
-      pkg="codexswitch-cli-linux-x64"
+      pkg="@syntaxskills/codexswitch-cli-linux-x64"
       os="linux"
       cpu="x64"
       ;;
     aarch64-unknown-linux-gnu)
-      pkg="codexswitch-cli-linux-arm64"
+      pkg="@syntaxskills/codexswitch-cli-linux-arm64"
       os="linux"
       cpu="arm64"
       ;;
     x86_64-apple-darwin)
-      pkg="codexswitch-cli-darwin-x64"
+      pkg="@syntaxskills/codexswitch-cli-darwin-x64"
       os="darwin"
       cpu="x64"
       ;;
     aarch64-apple-darwin)
-      pkg="codexswitch-cli-darwin-arm64"
+      pkg="@syntaxskills/codexswitch-cli-darwin-arm64"
       os="darwin"
       cpu="arm64"
       ;;
     x86_64-pc-windows-msvc)
-      pkg="codexswitch-cli-win32-x64"
+      pkg="@syntaxskills/codexswitch-cli-win32-x64"
       os="win32"
       cpu="x64"
       bin_name="codexswitch-cli.exe"

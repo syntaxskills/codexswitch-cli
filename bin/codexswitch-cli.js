@@ -15,11 +15,11 @@ const { platform, arch } = process;
 const require = createRequire(import.meta.url);
 
 const PLATFORM_PACKAGES = {
-  "linux-x64": "codexswitch-cli-linux-x64",
-  "linux-arm64": "codexswitch-cli-linux-arm64",
-  "darwin-x64": "codexswitch-cli-darwin-x64",
-  "darwin-arm64": "codexswitch-cli-darwin-arm64",
-  "win32-x64": "codexswitch-cli-win32-x64",
+  "linux-x64": "@syntaxskills/codexswitch-cli-linux-x64",
+  "linux-arm64": "@syntaxskills/codexswitch-cli-linux-arm64",
+  "darwin-x64": "@syntaxskills/codexswitch-cli-darwin-x64",
+  "darwin-arm64": "@syntaxskills/codexswitch-cli-darwin-arm64",
+  "win32-x64": "@syntaxskills/codexswitch-cli-win32-x64",
 };
 
 const platformKey = `${platform}-${arch}`;

@@ -14,9 +14,9 @@
 Use npm or Bun if you want the easiest setup:
 
 ```bash
-npm install -g codexswitch-cli
+npm install -g @syntaxskills/codexswitch-cli
 # or
-bun install -g codexswitch-cli
+bun install -g @syntaxskills/codexswitch-cli
 ```
 
 Then verify the command is available:

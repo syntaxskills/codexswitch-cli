@@ -64,7 +64,7 @@ if [[ "${has_release_assets}" -eq 0 ]]; then
   exit 1
 fi
 
-main_pkg="${npm_packages_dir}/codexswitch-cli-${version}.tgz"
+main_pkg="${npm_packages_dir}/syntaxskills-codexswitch-cli-${version}.tgz"
 if [[ ! -f "${main_pkg}" ]]; then
   echo "Missing npm main package: ${main_pkg}" >&2
   exit 1

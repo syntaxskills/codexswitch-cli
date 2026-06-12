@@ -80,12 +80,15 @@ for artifact_dir in "${artifact_dirs[@]}"; do
 done
 
 scripts/package-npm.sh "${version}" "${artifacts_dir}" "${npm_dir}"
-package_dirs=("${npm_dir}"/*)
+package_dirs=("${npm_dir}"/* "${npm_dir}"/*/*)
 if [[ ${#package_dirs[@]} -eq 0 ]]; then
   echo "No npm package directories generated under ${npm_dir}" >&2
   exit 1
 fi
 for pkg_dir in "${package_dirs[@]}"; do
+  if [[ ! -f "${pkg_dir}/package.json" ]]; then
+    continue
+  fi
   npm pack "${pkg_dir}" --pack-destination "${npm_packages_dir}"
 done
 npm pack --pack-destination "${npm_packages_dir}"

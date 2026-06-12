@@ -30,9 +30,9 @@ const LATEST_RELEASE_URL_OVERRIDE_ENV_VAR: &str = "CODEX_PROFILES_LATEST_RELEASE
 /// Update action the CLI should perform after the prompt exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateAction {
-    /// Update via `npm install -g codexswitch-cli`.
+    /// Update via `npm install -g @syntaxskills/codexswitch-cli`.
     NpmGlobalLatest,
-    /// Update via `bun install -g codexswitch-cli`.
+    /// Update via `bun install -g @syntaxskills/codexswitch-cli`.
     BunGlobalLatest,
     /// Update via `brew upgrade codexswitch-cli`.
     BrewUpgrade,
@@ -50,8 +50,12 @@ impl UpdateAction {
     /// Returns the list of command-line arguments for invoking the update.
     pub fn command_args(self) -> (&'static str, &'static [&'static str]) {
         match self {
-            UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "codexswitch-cli"]),
-            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "codexswitch-cli"]),
+            UpdateAction::NpmGlobalLatest => {
+                ("npm", &["install", "-g", "@syntaxskills/codexswitch-cli"])
+            }
+            UpdateAction::BunGlobalLatest => {
+                ("bun", &["install", "-g", "@syntaxskills/codexswitch-cli"])
+            }
             UpdateAction::BrewUpgrade => ("brew", &["upgrade", "codexswitch-cli"]),
         }
     }
@@ -797,7 +801,7 @@ mod tests {
             .expect("update cache");
         assert!(cache.last_prompted_at.is_none());
         let output = String::from_utf8(output).expect("utf8 output");
-        assert!(output.contains("Run `npm install -g codexswitch-cli` to update."));
+        assert!(output.contains("Run `npm install -g @syntaxskills/codexswitch-cli` to update."));
 
         let dir = tempfile::tempdir().expect("tempdir");
         let config = UpdateConfig {

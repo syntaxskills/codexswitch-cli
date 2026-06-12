@@ -344,11 +344,11 @@ jobs:
           }
 
           # Publish platform packages first so optionalDependencies can resolve.
-          for pkg in dist/npm-packages/codexswitch-cli-*-*.tgz; do
+          for pkg in dist/npm-packages/syntaxskills-codexswitch-cli-*-*.tgz; do
             publish_if_missing "$pkg"
           done
 
-          publish_if_missing "dist/npm-packages/codexswitch-cli-${version}.tgz"
+          publish_if_missing "dist/npm-packages/syntaxskills-codexswitch-cli-${version}.tgz"
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2

@@ -1,5 +1,5 @@
 {
-  "name": "codexswitch-cli",
+  "name": "@syntaxskills/codexswitch-cli",
   "version": "1.0.1",
   "description": "Ultra-fast, cross-platform profile switching for ChatGPT, Codex, and third-party providers",
   "license": "MIT",
@@ -11,11 +11,11 @@
     "node": ">=20"
   },
   "optionalDependencies": {
-    "codexswitch-cli-darwin-arm64": "1.0.1",
-    "codexswitch-cli-darwin-x64": "1.0.1",
-    "codexswitch-cli-linux-arm64": "1.0.1",
-    "codexswitch-cli-linux-x64": "1.0.1",
-    "codexswitch-cli-win32-x64": "1.0.1"
+    "@syntaxskills/codexswitch-cli-darwin-arm64": "1.0.1",
+    "@syntaxskills/codexswitch-cli-darwin-x64": "1.0.1",
+    "@syntaxskills/codexswitch-cli-linux-arm64": "1.0.1",
+    "@syntaxskills/codexswitch-cli-linux-x64": "1.0.1",
+    "@syntaxskills/codexswitch-cli-win32-x64": "1.0.1"
   },
   "files": [
     "bin"

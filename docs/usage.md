@@ -58,8 +58,8 @@ codexswitch-cli --plain <command>
 ## Uninstall
 
 ```bash
-npm uninstall -g codexswitch-cli
-bun uninstall -g codexswitch-cli
+npm uninstall -g @syntaxskills/codexswitch-cli
+bun uninstall -g @syntaxskills/codexswitch-cli
 cargo uninstall codexswitch-cli
 rm ~/.local/bin/codexswitch-cli
 ```
