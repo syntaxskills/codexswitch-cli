@@ -1,0 +1,13 @@
+a17913cb8963533b4a8e1cb5594aa5e45e5bffe2cf138a7d34a44183b3cb226d  codexswitch-cli-aarch64-apple-darwin.tar.gz
+7aa526603aafbd1509bde8b0fc9019c6f542d4aac43cde01609edf67f851a56c  codexswitch-cli-aarch64-unknown-linux-gnu.tar.gz
+6229ad9080d2ead631290eae517a84728b6b02d6be58e2d8fa38cdb7e3914629  codexswitch-cli-x86_64-apple-darwin.tar.gz
+ef2612e69eac30e95bc1024ff004bf6edc2e85a56a7b87dee67be42ce0ffd04c  codexswitch-cli-x86_64-pc-windows-msvc.exe.zip
+c0e12745592b99e633a58b8bdf8ee10f9c6984eb74dd90d519875956d6469bdd  codexswitch-cli-x86_64-unknown-linux-gnu.tar.gz
+c1dfc0de8fc9bd43b11fb09baffe800933c5e1d75b274c1973f4c38becf23fd3  syntaxskills-codexswitch-cli-1.0.2.tgz
+157c6bf051b1e7688bf341f5eefdb7ecf73a54088eff7c0c6b3680236dc7d914  syntaxskills-codexswitch-cli-darwin-arm64-1.0.2.tgz
+0826f246de36bfb601e538c62a30eb6f763a22a3333127273e79813746cdddd2  syntaxskills-codexswitch-cli-darwin-x64-1.0.2.tgz
+19ae575983be708df178560e41468ea18072f8178c7c8277ce377631a4e472d3  syntaxskills-codexswitch-cli-linux-arm64-1.0.2.tgz
+0b962d0fa8e8a0025ed5b2dfb2fe33a2fcf4b9ad2e5f53f0bfec5b43e015a615  syntaxskills-codexswitch-cli-linux-x64-1.0.2.tgz
+e4aeb70b48aa884f3a1c69efce8a477461d67c55c63725b9a0475924c67c1f49  syntaxskills-codexswitch-cli-win32-x64-1.0.2.tgz
+7993f35747e9262529e93c2456dd292e6cb1ee0f3608049245ecb8ba7d7eb665  codexswitch-cli-1.0.2.crate
+9d7ca41fea5c5f5a539a008deffd1a317cfe7fe47084c78aea318263beeb03fb  codexswitch-cli.rb
