@@ -42,6 +42,7 @@ use crate::{
 };
 use crate::{format_usage_unavailable, read_base_url, usage_unavailable};
 
+mod config_snapshot;
 mod identity;
 mod import_export;
 mod index;
@@ -70,6 +71,7 @@ pub(crate) use store::{
     unsaved_reason,
 };
 
+use config_snapshot::{apply_config_snapshot, write_config_snapshot};
 use labels::{labels_by_id, prune_labels, resolve_label_target_id};
 use managed_files::*;
 use paths::*;
@@ -110,7 +112,14 @@ pub fn save_profile(
     ensure_profile_dir(&paths.profiles, &id)?;
     copy_profile(&paths.auth, &target, PROFILE_COPY_CONTEXT_SAVE)?;
     if include_config {
-        copy_profile(&paths.config, &config_target, PROFILE_COPY_CONTEXT_SAVE)?;
+        write_config_snapshot(paths, &paths.config, &config_target).map_err(|err| {
+            crate::msg3(
+                PROFILE_ERR_COPY_CONTEXT,
+                PROFILE_COPY_CONTEXT_SAVE,
+                config_target.display(),
+                err,
+            )
+        })?;
     }
 
     let label_display = label_for_id(&store.labels, &id);
@@ -340,7 +349,14 @@ pub fn load_profile(
     copy_profile(&source, &paths.auth, PROFILE_COPY_CONTEXT_LOAD)?;
     if managed_files_contains_config(&managed_files) {
         let source_config = profile_config_path_for_id(&paths.profiles, &selected_id);
-        copy_profile(&source_config, &paths.config, PROFILE_COPY_CONTEXT_LOAD)?;
+        apply_config_snapshot(paths, &source_config, &paths.config).map_err(|err| {
+            crate::msg3(
+                PROFILE_ERR_COPY_CONTEXT,
+                PROFILE_COPY_CONTEXT_LOAD,
+                paths.config.display(),
+                err,
+            )
+        })?;
     }
 
     let label = label_for_id(&store.labels, &selected_id);

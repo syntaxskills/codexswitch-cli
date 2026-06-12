@@ -52,6 +52,8 @@ codexswitch-cli --plain <command>
 - Profiles are auth-only by default.
 - Saved profiles use `~/.codex/codexswitch/profiles/<profile-id>/auth.json`.
 - Profiles saved with `--include-config` also store `config.toml` in the same folder.
+- By default, loading a config profile replaces the entire active `config.toml`.
+- Set `managed_config_keys` in `~/.codex/codexswitch/config.toml` to save and replace only selected top-level fields while preserving everything else.
 - `list`, `status`, and JSON output show `managed_files`, such as `auth.json` or `auth.json + config.toml`.
 - Export bundles contain secrets.
 

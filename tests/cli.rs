@@ -72,8 +72,12 @@ impl TestEnv {
     }
 
     fn write_config(&self, base_url: &str) {
-        let path = self.codex_dir().join("config.toml");
         let contents = format!("chatgpt_base_url = \"{}\"\n", base_url);
+        self.write_config_contents(&contents);
+    }
+
+    fn write_config_contents(&self, contents: &str) {
+        let path = self.codex_dir().join("config.toml");
         fs::write(path, contents).expect("write config");
     }
 
@@ -640,7 +644,15 @@ fn ui_save_command() {
 fn ui_save_include_config_stores_sidecar_and_metadata() {
     let env = TestEnv::new();
     seed_alpha(&env);
-    env.write_config("http://third-party.example/backend-api");
+    env.write_config_contents(
+        r#"
+chatgpt_base_url = "http://third-party.example/backend-api"
+approval_policy = "never"
+
+[mcp_servers.keep]
+command = "server"
+"#,
+    );
 
     let output = env.run(&["save", "--label", "alpha", "--include-config"]);
 
@@ -658,6 +670,10 @@ fn ui_save_include_config_stores_sidecar_and_metadata() {
             .expect("read saved config")
             .contains("third-party.example")
     );
+    let saved_config =
+        fs::read_to_string(profile_config_path(&env, &id)).expect("read saved config");
+    assert!(saved_config.contains("approval_policy"));
+    assert!(saved_config.contains("mcp_servers"));
 
     let index = read_json_file(&env.profiles_dir().join("profiles.json"));
     assert_managed_files(
@@ -1626,11 +1642,35 @@ fn ui_load_command() {
 fn ui_load_profile_with_config_restores_auth_and_config() {
     let env = TestEnv::new();
     seed_alpha(&env);
-    env.write_config("http://alpha-provider.example/backend-api");
+    env.write_config_contents(
+        r#"
+model = "alpha-model"
+model_provider = "alpha"
+
+[model_providers.alpha]
+base_url = "http://alpha-provider.example/backend-api"
+
+[mcp_servers.alpha-only]
+command = "do-not-copy"
+"#,
+    );
     env.run(&["save", "--label", "alpha", "--include-config"]);
 
     seed_beta(&env);
-    env.write_config("http://beta-runtime.example/backend-api");
+    env.write_config_contents(
+        r#"
+model = "beta-model"
+model_provider = "beta"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[model_providers.beta]
+base_url = "http://beta-runtime.example/backend-api"
+
+[mcp_servers.keep]
+command = "server"
+"#,
+    );
     env.run(&["save", "--label", "beta"]);
 
     let output = env.run(&["load", "--label", "alpha"]);
@@ -1640,6 +1680,64 @@ fn ui_load_profile_with_config_restores_auth_and_config() {
     assert!(output.contains("\n [files: auth.json + config.toml]"));
     assert!(env.read_auth().contains(ALPHA_ACCOUNT));
     assert!(env.read_config().contains("alpha-provider.example"));
+    assert!(!env.read_config().contains("beta-runtime.example"));
+    assert!(!env.read_config().contains("approval_policy"));
+    assert!(!env.read_config().contains("sandbox_mode"));
+    assert!(!env.read_config().contains("[mcp_servers.keep]"));
+    assert!(env.read_config().contains("alpha-only"));
+}
+
+#[test]
+fn ui_load_profile_with_configured_keys_preserves_unmanaged_config() {
+    let env = TestEnv::new();
+    let settings_dir = env.codex_dir().join("codexswitch");
+    fs::create_dir_all(&settings_dir).expect("create settings dir");
+    fs::write(
+        settings_dir.join("config.toml"),
+        "managed_config_keys = [\"model\", \"model_provider\", \"model_providers\"]\n",
+    )
+    .expect("write settings");
+
+    seed_alpha(&env);
+    env.write_config_contents(
+        r#"
+model = "alpha-model"
+model_provider = "alpha"
+
+[model_providers.alpha]
+base_url = "http://alpha-provider.example/backend-api"
+
+[mcp_servers.alpha-only]
+command = "do-not-copy"
+"#,
+    );
+    env.run(&["save", "--label", "alpha", "--include-config"]);
+
+    seed_beta(&env);
+    env.write_config_contents(
+        r#"
+model = "beta-model"
+model_provider = "beta"
+approval_policy = "on-request"
+
+[model_providers.beta]
+base_url = "http://beta-runtime.example/backend-api"
+
+[mcp_servers.keep]
+command = "server"
+"#,
+    );
+
+    env.run(&["load", "--label", "alpha", "--force"]);
+
+    assert!(env.read_config().contains("alpha-provider.example"));
+    assert!(!env.read_config().contains("beta-runtime.example"));
+    assert!(
+        env.read_config()
+            .contains("approval_policy = \"on-request\"")
+    );
+    assert!(env.read_config().contains("[mcp_servers.keep]"));
+    assert!(!env.read_config().contains("alpha-only"));
 }
 
 #[test]

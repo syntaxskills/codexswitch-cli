@@ -8,7 +8,7 @@ use super::{
     pick_primary, profile_config_path_for_id, profile_files, profile_id_from_path,
     profile_path_for_id, prune_labels, prune_profiles_index, read_profiles_index,
     read_profiles_index_relaxed, resolve_sync_id, sync_profiles_index, update_profiles_index_entry,
-    write_profiles_index,
+    write_config_snapshot, write_profiles_index,
 };
 use crate::{
     PROFILE_ERR_SYNC_CURRENT, PROFILE_UNSAVED_NO_MATCH, Paths, Tokens, UsageLock, copy_atomic,
@@ -71,7 +71,8 @@ fn sync_profile_config(paths: &Paths, id: &str) -> Result<(), String> {
     }
     ensure_profile_dir(&paths.profiles, id)?;
     let target = profile_config_path_for_id(&paths.profiles, id);
-    sync_file(&paths.config, &target)
+    write_config_snapshot(paths, &paths.config, &target)
+        .map_err(|err| crate::msg1(PROFILE_ERR_SYNC_CURRENT, err))
 }
 
 fn sync_file(source: &Path, target: &Path) -> Result<(), String> {

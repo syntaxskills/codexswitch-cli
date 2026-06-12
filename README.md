@@ -66,23 +66,38 @@ codexswitch-cli load --label work
 codexswitch-cli load --label personal
 ```
 
-Use `--include-config` when a profile also needs `~/.codex/config.toml`, for example custom providers:
+Use `--include-config` when a profile also needs `~/.codex/config.toml`, for
+example custom providers:
 
 ```bash
 codexswitch-cli save --label third-party --include-config
 ```
 
-After using a third-party provider, restore the official Codex configuration and
-re-save each official profile with `--include-config`:
+Then restore the official Codex provider configuration and re-save each official
+profile with `--include-config`:
 
 ```bash
 codexswitch-cli save --label work --include-config
 codexswitch-cli save --label personal --include-config
 ```
 
-Loading an auth-only profile does not replace the active `config.toml`. Saving
-all provider-specific and official profiles with their correct config ensures
-that switching profiles also switches providers correctly.
+By default, CodexSwitch backs up and replaces the entire `config.toml`. This is
+the simplest behavior and ensures a profile restores exactly what was saved.
+
+To save and replace only specific top-level fields while preserving everything
+else in the active config, create `~/.codex/codexswitch/config.toml`:
+
+```toml
+managed_config_keys = [
+  "model",
+  "model_provider",
+  "model_providers",
+]
+```
+
+Loading an auth-only profile does not change any active config fields. Saving
+provider-specific and official profiles with `--include-config` ensures that
+switching profiles also switches providers correctly.
 
 ## Common Commands
 
