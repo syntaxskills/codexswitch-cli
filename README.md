@@ -72,6 +72,18 @@ Use `--include-config` when a profile also needs `~/.codex/config.toml`, for exa
 codexswitch-cli save --label third-party --include-config
 ```
 
+After using a third-party provider, restore the official Codex configuration and
+re-save each official profile with `--include-config`:
+
+```bash
+codexswitch-cli save --label work --include-config
+codexswitch-cli save --label personal --include-config
+```
+
+Loading an auth-only profile does not replace the active `config.toml`. Saving
+all provider-specific and official profiles with their correct config ensures
+that switching profiles also switches providers correctly.
+
 ## Common Commands
 
 | Command | What it does |
