@@ -3,10 +3,17 @@
 <p align="center">Ultra-fast, cross-platform profile switching for ChatGPT, Codex, and third-party providers.</p>
 
 <p align="center">
-  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/syntaxskills/codexswitch-cli/tests.yml?branch=main&label=tests" alt="Tests" /></a>
-  <a href="https://github.com/syntaxskills/codexswitch-cli/releases"><img src="https://img.shields.io/github/v/release/syntaxskills/codexswitch-cli" alt="Release" /></a>
-  <a href="https://github.com/syntaxskills/codexswitch-cli/stargazers"><img src="https://img.shields.io/github/stars/syntaxskills/codexswitch-cli?style=flat" alt="Stars" /></a>
-  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/syntaxskills/codexswitch-cli?color=blue" alt="License" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml/badge.svg?branch=main" alt="Tests" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/docs.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs" /></a>
+  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml/badge.svg" alt="Security audit" /></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/usage.md">Usage</a> ·
+  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/verification.md">Verification</a> ·
+  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/CHANGELOG.md">Changelog</a>
 </p>
 
 ## Install
@@ -37,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/syntaxskills/codexswitch-cli/main/i
 Build from source:
 
 ```bash
-cargo install --locked codexswitch-cli
+cargo install --git https://github.com/syntaxskills/codexswitch-cli --locked
 ```
 
 Requires Rust 1.94 or newer.
@@ -139,3 +146,9 @@ Auth files and export bundles contain secrets. Keep them private.
 ## About SyntaxSkills
 
 SyntaxSkills hosts this repository to keep maintenance continuous and community-owned. The goal is not profit; it is to keep the tool maintained beyond any single person. Contributors and maintainers are welcome to join.
+
+## Acknowledgements
+
+CodexSwitch CLI is inspired by
+[`codex-profiles`](https://github.com/midhunmonachan/codex-profiles) and
+preserves its commit history in this repository.
