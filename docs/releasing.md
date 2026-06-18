@@ -39,6 +39,10 @@ Then remove the `CARGO_REGISTRY_TOKEN` GitHub Actions secret. Future stable
 releases obtain a short-lived token through crates.io's official
 `crates-io-auth-action`. The token is revoked automatically when the job ends.
 
+Maintainers can verify the configuration without publishing a new version by
+running the `release` workflow for an existing stable tag with
+`verify_crates_io_trusted_publisher` enabled.
+
 ## Recovery
 
 The release workflow accepts an existing tag through `workflow_dispatch`.
