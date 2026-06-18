@@ -14,6 +14,7 @@ Fast, local-first profile switching for Codex, ChatGPT accounts, and custom prov
 [Quick start](#quick-start) · [Install](#install) · [Commands](#commands) · [Documentation](#documentation)
 
 </div>
+
 CodexSwitch stores named snapshots of `~/.codex/auth.json` and, when requested,
 `~/.codex/config.toml`. It restores them atomically, so moving between work,
 personal, and provider-specific profiles does not require copying credentials
@@ -22,7 +23,6 @@ by hand or repeatedly logging in.
 ```console
 $ codexswitch-cli save --label work
 Saved profile [PRO] work@example.com (work)
-
 $ codexswitch-cli save --label personal
 Saved profile [PRO] personal@example.com (personal)
 
