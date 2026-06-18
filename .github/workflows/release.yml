@@ -10,6 +10,11 @@ on:
         description: Existing release tag to publish or recover (for example, v0.3.0)
         required: true
         type: string
+      bootstrap_crates_io:
+        description: Use CARGO_REGISTRY_TOKEN for the crate's one-time initial publish
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -272,31 +277,56 @@ jobs:
           set -euo pipefail
           git checkout --detach "${RELEASE_SHA}"
 
-      - name: Publish to crates.io
-        if: ${{ needs.tag-check.outputs.prerelease != 'true' }}
+      - id: crates_io_status
+        name: Check crates.io publication status
+        if: ${{ needs.tag-check.outputs.prerelease != 'true' && github.repository == 'syntaxskills/codexswitch-cli' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.tag-check.outputs.version }}"
+          url="https://crates.io/api/v1/crates/codexswitch-cli/${version}"
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            -H "User-Agent: ${GITHUB_REPOSITORY}" "${url}")"
+
+          case "${status}" in
+            200)
+              echo "codexswitch-cli ${version} is already published to crates.io"
+              echo "published=true" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "codexswitch-cli ${version} is not published to crates.io"
+              echo "published=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "crates.io returned HTTP ${status} while checking ${url}" >&2
+              exit 1
+              ;;
+          esac
+
+      - id: crates_io_auth
+        name: Authenticate to crates.io with trusted publishing
+        if: ${{ needs.tag-check.outputs.prerelease != 'true' && github.repository == 'syntaxskills/codexswitch-cli' && steps.crates_io_status.outputs.published == 'false' && inputs.bootstrap_crates_io != true }}
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      - name: Publish to crates.io with trusted publishing
+        if: ${{ needs.tag-check.outputs.prerelease != 'true' && github.repository == 'syntaxskills/codexswitch-cli' && steps.crates_io_status.outputs.published == 'false' && inputs.bootstrap_crates_io != true }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates_io_auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          test -n "${CARGO_REGISTRY_TOKEN}" || { echo "Trusted publishing did not return a crates.io token" >&2; exit 1; }
+          cargo publish --locked --token "${CARGO_REGISTRY_TOKEN}"
+
+      - name: Bootstrap initial crates.io publication
+        if: ${{ needs.tag-check.outputs.prerelease != 'true' && github.repository == 'syntaxskills/codexswitch-cli' && steps.crates_io_status.outputs.published == 'false' && inputs.bootstrap_crates_io == true }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
-          # Safety gate: only publish from production repository
-          if [[ "${GITHUB_REPOSITORY}" != "syntaxskills/codexswitch-cli" ]]; then
-            echo "Skipping crates.io publish: not production repository (current: ${GITHUB_REPOSITORY})"
-            exit 0
-          fi
-
-          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
-            echo "Warning: CARGO_REGISTRY_TOKEN not set, skipping crates.io publish"
-            echo "Add your token at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            exit 0
-          fi
-
-          version="${{ needs.tag-check.outputs.version }}"
-          if curl -fsS -H "User-Agent: ${GITHUB_REPOSITORY}" "https://crates.io/api/v1/crates/codexswitch-cli/${version}" >/dev/null 2>&1; then
-            echo "codexswitch-cli ${version} is already published to crates.io; skipping"
-            exit 0
-          fi
-
-          echo "Publishing to crates.io from ${GITHUB_REPOSITORY}..."
+          test -n "${CARGO_REGISTRY_TOKEN}" || {
+            echo "bootstrap_crates_io requires the CARGO_REGISTRY_TOKEN Actions secret" >&2
+            exit 1
+          }
           cargo publish --locked --token "${CARGO_REGISTRY_TOKEN}"
 
       - name: Publish to npm

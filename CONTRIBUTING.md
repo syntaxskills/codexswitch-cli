@@ -59,4 +59,5 @@ cargo test --tests --locked
 ## Releases
 
 Releases are built from `v*` tags by GitHub Actions. Maintainers handle
-publishing. Do not move a published tag.
+publishing. The maintainer setup and recovery procedure are documented in
+[`docs/releasing.md`](docs/releasing.md). Do not move a published tag.
