@@ -475,13 +475,8 @@ fn read_auth_store_mode_for_path(path: &Path) -> Result<AuthStoreMode, String> {
     let Some(config_path) = path.parent().map(|dir| dir.join("config.toml")) else {
         return Ok(AuthStoreMode::File);
     };
-    let Ok(contents) = std::fs::read_to_string(config_path) else {
-        return Ok(AuthStoreMode::File);
-    };
-    for line in contents.lines() {
-        if let Some(value) = parse_config_value(line, "cli_auth_credentials_store_mode") {
-            return parse_auth_store_mode(&value);
-        }
+    if let Some(value) = crate::read_toml_string(&config_path, "cli_auth_credentials_store_mode") {
+        return parse_auth_store_mode(&value);
     }
     Ok(AuthStoreMode::File)
 }
@@ -494,45 +489,6 @@ fn parse_auth_store_mode(value: &str) -> Result<AuthStoreMode, String> {
         "ephemeral" => Ok(AuthStoreMode::Ephemeral),
         other => Err(crate::msg1(AUTH_ERR_UNSUPPORTED_STORE_MODE, other)),
     }
-}
-
-fn parse_config_value(line: &str, key: &str) -> Option<String> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('#') {
-        return None;
-    }
-    let (config_key, raw_value) = line.split_once('=')?;
-    if config_key.trim() != key {
-        return None;
-    }
-    let value = strip_inline_comment(raw_value).trim();
-    if value.is_empty() {
-        return None;
-    }
-    let value = value.trim_matches('"').trim_matches('\'').trim();
-    if value.is_empty() {
-        return None;
-    }
-    Some(value.to_string())
-}
-
-fn strip_inline_comment(value: &str) -> &str {
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut escape = false;
-    for (idx, ch) in value.char_indices() {
-        match ch {
-            '"' if !in_single && !escape => in_double = !in_double,
-            '\'' if !in_double => in_single = !in_single,
-            '#' if !in_single && !in_double => return value[..idx].trim_end(),
-            _ => {}
-        }
-        escape = in_double && ch == '\\' && !escape;
-        if ch != '\\' {
-            escape = false;
-        }
-    }
-    value.trim_end()
 }
 
 fn refresh_access_token(refresh_token: &str) -> Result<RefreshResponse, String> {

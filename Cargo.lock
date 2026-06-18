@@ -191,7 +191,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "shlex",
  "supports-color",
  "tempfile",
  "toml_edit",

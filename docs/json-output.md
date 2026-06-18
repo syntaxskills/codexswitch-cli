@@ -39,6 +39,7 @@ Failures use the same envelope:
   release.
 - Command-specific payloads always live under `data`; their documented field
   names remain part of the schema.
+- Usage windows include `left_percent`, `reset_at`, and `window_seconds`.
 
 CodexSwitch CLI 2.0.0 and earlier emitted command-specific top-level JSON
 shapes and plain-text errors. Consumers upgrading to the next major release

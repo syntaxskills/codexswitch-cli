@@ -63,8 +63,7 @@ impl UpdateAction {
     /// Returns string representation of the command-line arguments for invoking the update.
     pub fn command_str(self) -> String {
         let (command, args) = self.command_args();
-        shlex::try_join(std::iter::once(command).chain(args.iter().copied()))
-            .unwrap_or_else(|_| format!("{command} {}", args.join(" ")))
+        format!("{command} {}", args.join(" "))
     }
 }
 

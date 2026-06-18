@@ -2318,6 +2318,13 @@ fn ui_status_json_command() {
             .unwrap(),
         &serde_json::json!(2000000000)
     );
+    assert_eq!(
+        buckets[0]
+            .get("five_hour")
+            .and_then(|value| value.get("window_seconds"))
+            .unwrap(),
+        &serde_json::json!(18000)
+    );
     assert_eq!(buckets[0].get("weekly").unwrap(), &serde_json::Value::Null);
 
     let _ = usage_handle.join();
@@ -2702,42 +2709,6 @@ fn ui_status_all_json_includes_errored_profiles_by_default() {
 }
 
 #[test]
-fn ui_status_all_json_includes_errored_profiles() {
-    let env = TestEnv::new();
-    seed_profiles(&env);
-    seed_alpha(&env);
-    seed_errored_profile(&env, "gamma@example.com-team");
-    env.write_profiles_index(
-        &[
-            (ALPHA_ID, 300),
-            (BETA_ID, 200),
-            ("gamma@example.com-team", 100),
-        ],
-        &[(ALPHA_ID, "alpha"), (BETA_ID, "beta")],
-        None,
-    );
-    let usage_body = r#"{"rate_limit":{"primary_window":{"used_percent":20,"limit_window_seconds":18000,"reset_at":2000000000}}}"#;
-    let (usage_addr, usage_handle) = start_usage_server(usage_body, 6).expect("usage server");
-    env.write_config(&format!("http://{usage_addr}/backend-api"));
-
-    let output = env.run(&["status", "--all", "--json"]);
-    let json: serde_json::Value = parse_json_success(&output, "status");
-    let profiles = json
-        .get("profiles")
-        .and_then(|value| value.as_array())
-        .expect("profiles array");
-    assert_eq!(profiles.len(), 3);
-    assert!(
-        profiles
-            .iter()
-            .any(|profile| profile.get("error").is_some()
-                && !profile.get("error").unwrap().is_null())
-    );
-
-    let _ = usage_handle.join();
-}
-
-#[test]
 fn ui_status_all_json_402_exposes_structured_usage_error() {
     let env = TestEnv::new();
     let profile_id = "mail1@example.com-team";
@@ -2852,10 +2823,11 @@ fn ui_status_all_renders_grouped_multi_bucket_windows() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--all"]);
-    assert!(output.contains("codex"));
+    assert!(output.contains("Codex"));
     assert!(output.contains("5 hour:"));
     assert!(output.contains("Weekly:"));
     assert!(output.contains("codex_other"));
+    assert!(output.contains("1 hour:"));
     let _ = usage_handle.join();
 }
 
@@ -2919,33 +2891,6 @@ fn ui_status_all_includes_api_profiles_by_default() {
 
 #[test]
 fn ui_status_all_includes_errored_profiles_by_default() {
-    let env = TestEnv::new();
-    seed_profiles(&env);
-    seed_alpha(&env);
-    seed_errored_profile(&env, "gamma@example.com-team");
-    env.write_profiles_index(
-        &[
-            (ALPHA_ID, 300),
-            (BETA_ID, 200),
-            ("gamma@example.com-team", 100),
-        ],
-        &[(ALPHA_ID, "alpha"), (BETA_ID, "beta")],
-        None,
-    );
-    let usage_body = r#"{"rate_limit":{"primary_window":{"used_percent":20,"limit_window_seconds":18000,"reset_at":2000000000}}}"#;
-    let (usage_addr, usage_handle) = start_usage_server(usage_body, 6).expect("usage server");
-    env.write_config(&format!("http://{usage_addr}/backend-api"));
-
-    let output = env.run(&["status", "--all"]);
-    assert!(output.contains("alpha@example.com"));
-    assert!(output.contains("beta@example.com"));
-    assert!(output.contains("Error: Profile is missing email or plan information."));
-    assert!(!output.contains("errored profiles hidden"));
-    let _ = usage_handle.join();
-}
-
-#[test]
-fn ui_status_all_includes_errored_profiles() {
     let env = TestEnv::new();
     seed_profiles(&env);
     seed_alpha(&env);

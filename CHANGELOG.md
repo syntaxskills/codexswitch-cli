@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modules without changing public interfaces
 - replaced raw profile filenames in terminal output with concise Credentials
   and Settings labels while preserving filenames in JSON output
+- completed the status terminal UI with API-derived usage-window labels,
+  aligned usage rows, and window durations in JSON output
+- removed duplicate config parsers, an unnecessary direct dependency, and
+  redundant tests using the Ponytail simplification rules
 
 ## [2.0.0] - 2026-06-18
 

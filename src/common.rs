@@ -122,6 +122,16 @@ pub fn default_profiles_dir(codex_dir: &Path) -> PathBuf {
     codex_dir.join("codexswitch").join("profiles")
 }
 
+pub(crate) fn read_toml_string(path: &Path, key: &str) -> Option<String> {
+    fs::read_to_string(path)
+        .ok()?
+        .parse::<toml_edit::DocumentMut>()
+        .ok()?
+        .get(key)?
+        .as_str()
+        .map(str::to_string)
+}
+
 fn resolve_profiles_dir(codex_dir: &Path) -> PathBuf {
     env::var_os("CODEXSWITCH_CLI_PROFILES_DIR")
         .map(PathBuf::from)
@@ -130,58 +140,10 @@ fn resolve_profiles_dir(codex_dir: &Path) -> PathBuf {
 }
 
 fn resolve_home_dir() -> Option<PathBuf> {
-    let codex_home = env::var_os("CODEXSWITCH_CLI_HOME").map(PathBuf::from);
-    let base_home = BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
-    let home = env::var_os("HOME").map(PathBuf::from);
-    let userprofile = env::var_os("USERPROFILE").map(PathBuf::from);
-    let homedrive = env::var_os("HOMEDRIVE").map(PathBuf::from);
-    let homepath = env::var_os("HOMEPATH").map(PathBuf::from);
-    resolve_home_dir_with(
-        codex_home,
-        base_home,
-        home,
-        userprofile,
-        homedrive,
-        homepath,
-    )
-}
-
-fn resolve_home_dir_with(
-    codex_home: Option<PathBuf>,
-    base_home: Option<PathBuf>,
-    home: Option<PathBuf>,
-    userprofile: Option<PathBuf>,
-    homedrive: Option<PathBuf>,
-    homepath: Option<PathBuf>,
-) -> Option<PathBuf> {
-    if let Some(path) = non_empty_path(codex_home) {
-        return Some(path);
-    }
-    if let Some(path) = base_home {
-        return Some(path);
-    }
-    if let Some(path) = non_empty_path(home) {
-        return Some(path);
-    }
-    if let Some(path) = non_empty_path(userprofile) {
-        return Some(path);
-    }
-    match (homedrive, homepath) {
-        (Some(drive), Some(path)) => {
-            let mut out = drive;
-            out.push(path);
-            if out.as_os_str().is_empty() {
-                None
-            } else {
-                Some(out)
-            }
-        }
-        _ => None,
-    }
-}
-
-fn non_empty_path(path: Option<PathBuf>) -> Option<PathBuf> {
-    path.filter(|path| !path.as_os_str().is_empty())
+    env::var_os("CODEXSWITCH_CLI_HOME")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf()))
 }
 
 pub fn ensure_paths(paths: &Paths) -> Result<(), String> {
@@ -720,45 +682,14 @@ mod tests {
     }
 
     #[test]
-    fn resolve_home_dir_prefers_codex_env() {
-        let out = resolve_home_dir_with(
-            Some(PathBuf::from("/tmp/codex")),
-            Some(PathBuf::from("/tmp/base")),
-            Some(PathBuf::from("/tmp/home")),
-            None,
-            None,
-            None,
-        )
-        .unwrap();
-        assert_eq!(out, PathBuf::from("/tmp/codex"));
-    }
-
-    #[test]
-    fn resolve_home_dir_uses_base_dirs() {
-        let out = resolve_home_dir_with(
-            None,
-            Some(PathBuf::from("/tmp/base")),
-            None,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
-        assert_eq!(out, PathBuf::from("/tmp/base"));
-    }
-
-    #[test]
-    fn resolve_home_dir_falls_back() {
-        let out = resolve_home_dir_with(
-            Some(PathBuf::from("")),
-            None,
-            Some(PathBuf::from("/tmp/home")),
-            Some(PathBuf::from("/tmp/user")),
-            Some(PathBuf::from("C:")),
-            Some(PathBuf::from("/Users")),
-        )
-        .unwrap();
-        assert_eq!(out, PathBuf::from("/tmp/home"));
+    fn reads_toml_strings_with_comments_and_hashes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs::write(&path, "url = \"https://example.com/#/path\" # comment\n").unwrap();
+        assert_eq!(
+            read_toml_string(&path, "url").as_deref(),
+            Some("https://example.com/#/path")
+        );
     }
 
     #[test]
@@ -916,60 +847,6 @@ mod tests {
         let err = UnexpectedHttpError::from_ureq_response(response, Some(&url));
         let rendered = err.to_string();
         assert!(rendered.contains("unexpected status 502 Bad Gateway: gateway exploded"));
-    }
-
-    #[test]
-    fn resolve_home_dir_uses_userprofile() {
-        let out = resolve_home_dir_with(
-            None,
-            None,
-            None,
-            Some(PathBuf::from("/tmp/user")),
-            None,
-            None,
-        )
-        .unwrap();
-        assert_eq!(out, PathBuf::from("/tmp/user"));
-    }
-
-    #[test]
-    fn resolve_home_dir_uses_drive() {
-        let out = resolve_home_dir_with(
-            None,
-            None,
-            None,
-            None,
-            Some(PathBuf::from("C:")),
-            Some(PathBuf::from("Users")),
-        )
-        .unwrap();
-        assert_eq!(out, PathBuf::from("C:/Users"));
-    }
-
-    #[test]
-    fn resolve_home_dir_none_when_empty() {
-        assert!(resolve_home_dir_with(None, None, None, None, None, None).is_none());
-    }
-
-    #[test]
-    fn resolve_home_dir_ignores_empty_values() {
-        assert!(
-            resolve_home_dir_with(None, None, Some(PathBuf::from("")), None, None, None,).is_none()
-        );
-        assert!(
-            resolve_home_dir_with(None, None, None, Some(PathBuf::from("")), None, None,).is_none()
-        );
-        assert!(
-            resolve_home_dir_with(
-                None,
-                None,
-                None,
-                None,
-                Some(PathBuf::from("")),
-                Some(PathBuf::from("")),
-            )
-            .is_none()
-        );
     }
 
     #[test]

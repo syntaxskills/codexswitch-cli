@@ -2,7 +2,6 @@ use chrono::{DateTime, Local, TimeZone, Utc};
 use colored::Colorize;
 use fslock::LockFile;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -44,12 +43,14 @@ pub(crate) struct UsageLimits {
 pub(crate) struct UsageWindow {
     pub(crate) left_percent: f64,
     pub(crate) reset_at: i64,
+    pub(crate) window_seconds: i64,
 }
 
 #[derive(Clone, Serialize)]
 pub(crate) struct UsageSnapshotWindow {
     pub(crate) left_percent: i64,
     pub(crate) reset_at: i64,
+    pub(crate) window_seconds: i64,
 }
 
 #[derive(Clone, Serialize)]
@@ -139,53 +140,10 @@ struct UsageBucket {
 }
 
 pub fn read_base_url(paths: &Paths) -> Result<String, String> {
-    if let Ok(contents) = fs::read_to_string(&paths.config) {
-        for line in contents.lines() {
-            if let Some(value) = parse_config_value(line, "chatgpt_base_url") {
-                return validate_base_url(&value);
-            }
-        }
+    if let Some(value) = crate::read_toml_string(&paths.config, "chatgpt_base_url") {
+        return validate_base_url(&value);
     }
     Ok(DEFAULT_BASE_URL.to_string())
-}
-
-fn parse_config_value(line: &str, key: &str) -> Option<String> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('#') {
-        return None;
-    }
-    let (config_key, raw_value) = line.split_once('=')?;
-    if config_key.trim() != key {
-        return None;
-    }
-    let value = strip_inline_comment(raw_value).trim();
-    if value.is_empty() {
-        return None;
-    }
-    let value = value.trim_matches('"').trim_matches('\'').trim();
-    if value.is_empty() {
-        return None;
-    }
-    Some(value.to_string())
-}
-
-fn strip_inline_comment(value: &str) -> &str {
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut escape = false;
-    for (idx, ch) in value.char_indices() {
-        match ch {
-            '"' if !in_single && !escape => in_double = !in_double,
-            '\'' if !in_double => in_single = !in_single,
-            '#' if !in_single && !in_double => return value[..idx].trim_end(),
-            _ => {}
-        }
-        escape = in_double && ch == '\\' && !escape;
-        if ch != '\\' {
-            escape = false;
-        }
-    }
-    value.trim_end()
 }
 
 fn normalize_base_url(value: &str) -> String {
@@ -440,16 +398,9 @@ fn usage_lines_from_payload(
         if !has_data {
             continue;
         }
-        let mut bucket_lines = format_usage(
-            format_limit(limits.five_hour.as_ref(), now, unavailable_text),
-            format_limit(limits.weekly.as_ref(), now, unavailable_text),
-            unavailable_text,
-        );
-        if limits.five_hour.is_some() && limits.weekly.is_some() {
-            bucket_lines = label_dual_window_lines(bucket_lines);
-        }
+        let bucket_lines = format_usage(&limits, unavailable_text, now);
         if multi_bucket {
-            let label = usage_bucket_label(&bucket);
+            let label = usage_bucket_display_label(&bucket);
             lines.push(label.to_string());
             lines.extend(bucket_lines.into_iter().map(|line| format!("  {line}")));
         } else {
@@ -464,16 +415,6 @@ fn usage_lines_from_payload(
     } else {
         lines
     }
-}
-
-fn label_dual_window_lines(mut lines: Vec<String>) -> Vec<String> {
-    if let Some(first) = lines.get_mut(0) {
-        *first = format!("5 hour: {first}");
-    }
-    if let Some(second) = lines.get_mut(1) {
-        *second = format!("Weekly: {second}");
-    }
-    lines
 }
 
 fn usage_buckets(payload: &UsagePayload) -> Vec<UsageBucket> {
@@ -521,8 +462,10 @@ fn ordered_usage_buckets(mut buckets: Vec<UsageBucket>) -> Vec<UsageBucket> {
     buckets
 }
 
-fn usage_bucket_label(bucket: &UsageBucket) -> &str {
-    if bucket.label.trim().is_empty() {
+fn usage_bucket_display_label(bucket: &UsageBucket) -> &str {
+    if bucket.limit_id == "codex" {
+        "Codex"
+    } else if bucket.label.trim().is_empty() {
         "unknown"
     } else {
         bucket.label.as_str()
@@ -565,10 +508,9 @@ fn usage_snapshot_from_payload(payload: &UsagePayload) -> Vec<UsageSnapshotBucke
             if five_hour.is_none() && weekly.is_none() {
                 return None;
             }
-            let label = usage_bucket_label(&bucket).to_string();
             Some(UsageSnapshotBucket {
                 id: bucket.limit_id,
-                label,
+                label: bucket.label,
                 five_hour,
                 weekly,
             })
@@ -580,6 +522,7 @@ fn usage_snapshot_window(window: &UsageWindow) -> UsageSnapshotWindow {
     UsageSnapshotWindow {
         left_percent: window.left_percent.round() as i64,
         reset_at: window.reset_at,
+        window_seconds: window.window_seconds,
     }
 }
 
@@ -589,47 +532,7 @@ fn usage_window_output(window: &RateLimitWindowSnapshot) -> UsageWindow {
     UsageWindow {
         left_percent,
         reset_at,
-    }
-}
-
-pub(crate) struct UsageLine {
-    pub(crate) bar: String,
-    pub(crate) percent: String,
-    pub(crate) reset: String,
-    pub(crate) left_percent: Option<i64>,
-}
-
-impl UsageLine {
-    fn unavailable(text: &str) -> Self {
-        UsageLine {
-            bar: text.to_string(),
-            percent: String::new(),
-            reset: String::new(),
-            left_percent: None,
-        }
-    }
-}
-
-pub(crate) fn format_limit(
-    window: Option<&UsageWindow>,
-    now: DateTime<Local>,
-    unavailable_text: &str,
-) -> UsageLine {
-    let Some(window) = window else {
-        return UsageLine::unavailable(unavailable_text);
-    };
-    let left_percent = window.left_percent;
-    let left_percent_rounded = left_percent.round() as i64;
-    let bar = render_bar(left_percent);
-    let bar = style_usage_bar(&bar, left_percent);
-    let percent = format!("{left_percent_rounded}%");
-    let reset =
-        format_reset_timestamp(window.reset_at, now).unwrap_or_else(|| "unknown".to_string());
-    UsageLine {
-        bar,
-        percent,
-        reset,
-        left_percent: Some(left_percent_rounded),
+        window_seconds: window.limit_window_seconds,
     }
 }
 
@@ -647,26 +550,22 @@ pub fn format_usage_unavailable(text: &str, use_color: bool) -> String {
     }
 }
 
-pub(crate) fn format_usage(
-    five: UsageLine,
-    weekly: UsageLine,
-    unavailable_text: &str,
-) -> Vec<String> {
+fn format_usage(limits: &UsageLimits, unavailable_text: &str, now: DateTime<Local>) -> Vec<String> {
     let use_color = use_color_stdout();
-    let available: Vec<UsageLine> = [five, weekly]
+    let available: Vec<&UsageWindow> = [limits.five_hour.as_ref(), limits.weekly.as_ref()]
         .into_iter()
-        .filter(|line| line.left_percent.is_some())
+        .flatten()
         .collect();
     if available.is_empty() {
         return vec![format_usage_unavailable(unavailable_text, use_color)];
     }
-    let has_zero = available.iter().any(|line| line.left_percent == Some(0));
+    let has_zero = available.iter().any(|window| window.left_percent < 0.5);
     let multiple = available.len() > 1;
     available
         .into_iter()
-        .map(|line| {
-            let dim = use_color && multiple && has_zero && line.left_percent != Some(0);
-            format_usage_line(&line, dim, use_color)
+        .map(|window| {
+            let dim = use_color && multiple && has_zero && window.left_percent >= 0.5;
+            format_usage_window(window, now, dim, use_color)
         })
         .collect()
 }
@@ -681,52 +580,32 @@ pub(crate) fn format_reset_timestamp(reset_at: i64, now: DateTime<Local>) -> Opt
     }
 }
 
-fn format_usage_line(line: &UsageLine, dim: bool, use_color: bool) -> String {
-    let reset = reset_label(&line.reset);
-    let reset = reset.to_string();
-    let percent = if line.percent.is_empty() {
-        String::new()
-    } else {
-        format!("{} left", line.percent)
-    };
+fn format_usage_window(
+    window: &UsageWindow,
+    now: DateTime<Local>,
+    dim: bool,
+    use_color: bool,
+) -> String {
+    let label = format_window_label(window.window_seconds);
+    let reset =
+        format_reset_timestamp(window.reset_at, now).unwrap_or_else(|| "unknown".to_string());
+    let percent = format!("{}% left", window.left_percent.round() as i64);
     let resets = format_resets_suffix(&reset, use_color);
     if is_plain() {
-        let mut out = String::new();
-        if !percent.is_empty() {
-            out.push_str(&percent);
-        }
-        if !resets.is_empty() {
-            if !out.is_empty() {
-                out.push(' ');
-            }
-            out.push_str(&resets);
-        }
-        return out;
+        return format!("{label}: {percent} {resets}");
     }
-    let resets = if resets.is_empty() {
-        resets
-    } else {
-        format!(" {resets}")
-    };
+    let bar = style_usage_bar(&render_bar(window.left_percent), window.left_percent);
     let bar = if dim {
-        crate::ui::strip_ansi(&line.bar)
+        crate::ui::strip_ansi(&bar)
     } else {
-        line.bar.clone()
+        bar
     };
-    let formatted = if percent.is_empty() {
-        format!("{bar}{resets}")
-    } else {
-        format!("{bar} {percent}{resets}")
-    };
+    let formatted = format!("{:<8} {bar} {percent} {resets}", format!("{label}:"));
     if dim && use_color {
         formatted.dimmed().to_string()
     } else {
         formatted
     }
-}
-
-fn reset_label(reset: &str) -> &str {
-    if reset.is_empty() { "unknown" } else { reset }
 }
 
 fn format_resets_suffix(reset: &str, use_color: bool) -> String {
@@ -768,6 +647,21 @@ fn style_usage_bar(bar: &str, left_percent: f64) -> String {
 fn local_from_timestamp(ts: i64) -> Option<DateTime<Local>> {
     let dt = chrono::Utc.timestamp_opt(ts, 0).single()?;
     Some(dt.with_timezone(&Local))
+}
+
+fn format_window_label(seconds: i64) -> String {
+    const HOUR: i64 = 60 * 60;
+    const DAY: i64 = 24 * HOUR;
+    const WEEK: i64 = 7 * DAY;
+    if seconds == WEEK {
+        "Weekly".to_string()
+    } else if seconds > 0 && seconds % DAY == 0 {
+        format!("{} day", seconds / DAY)
+    } else if seconds > 0 && seconds % HOUR == 0 {
+        format!("{} hour", seconds / HOUR)
+    } else {
+        format!("{seconds}s")
+    }
 }
 
 #[derive(Debug)]
@@ -859,37 +753,6 @@ mod tests {
             }
         });
         format!("http://{addr}")
-    }
-
-    #[test]
-    fn config_parsing_paths() {
-        assert!(parse_config_value("", "key").is_none());
-        assert!(parse_config_value("# comment", "key").is_none());
-        assert!(parse_config_value("other = 1", "key").is_none());
-        assert!(parse_config_value("key =", "key").is_none());
-        assert_eq!(
-            parse_config_value("key = 'value'", "key"),
-            Some("value".to_string())
-        );
-        assert_eq!(
-            parse_config_value(
-                r#"chatgpt_base_url = "https://chatgpt.com/backend-api" # comment"#,
-                "chatgpt_base_url"
-            ),
-            Some("https://chatgpt.com/backend-api".to_string())
-        );
-        assert_eq!(
-            parse_config_value(
-                r#"chatgpt_base_url = "https://example.com/#/foo" # tail"#,
-                "chatgpt_base_url"
-            ),
-            Some("https://example.com/#/foo".to_string())
-        );
-        assert!(parse_config_value("other = \"value\"", "chatgpt_base_url").is_none());
-        assert!(
-            parse_config_value("chatgpt_base_url = '' # comment", "chatgpt_base_url").is_none()
-        );
-        assert_eq!(strip_inline_comment("value # comment"), "value");
     }
 
     #[test]
@@ -1123,8 +986,7 @@ mod tests {
         };
         let limits = build_usage_limits(&payload);
         assert!(limits.five_hour.is_some());
-        let line = format_limit(limits.five_hour.as_ref(), Local::now(), "none");
-        assert!(line.left_percent.is_some());
+        assert_eq!(format_usage(&limits, "none", Local::now()).len(), 2);
     }
 
     #[test]
@@ -1176,8 +1038,10 @@ mod tests {
             }]),
         };
         let lines = usage_lines_from_payload(&payload, "unavailable", now);
-        assert!(lines.iter().any(|line| line == "codex"));
+        assert!(lines.iter().any(|line| line == "Codex"));
         assert!(lines.iter().any(|line| line == "codex_other"));
+        assert!(lines.iter().any(|line| line.contains("5 hour:")));
+        assert!(lines.iter().any(|line| line.contains("1 hour:")));
         assert!(
             lines
                 .iter()
@@ -1220,25 +1084,29 @@ mod tests {
     #[test]
     fn format_usage_variants() {
         let unavailable = "unavailable";
-        let lines = format_usage(
-            UsageLine::unavailable(unavailable),
-            UsageLine::unavailable(unavailable),
-            unavailable,
-        );
+        let lines = format_usage(&UsageLimits::default(), unavailable, Local::now());
         assert_eq!(lines.len(), 1);
     }
 
     #[test]
     fn format_usage_line_plain_and_dim() {
-        let line = UsageLine {
-            bar: render_bar(50.0),
-            percent: "50%".to_string(),
-            reset: "soon".to_string(),
-            left_percent: Some(50),
+        let now = Local::now();
+        let window = UsageWindow {
+            left_percent: 50.0,
+            reset_at: now.timestamp() + 60,
+            window_seconds: 18000,
         };
         let _plain = set_plain_guard(true);
-        let plain = format_usage_line(&line, false, false);
-        assert!(plain.contains("left"));
+        let plain = format_usage_window(&window, now, false, false);
+        assert!(plain.starts_with("5 hour: 50% left (resets "));
+    }
+
+    #[test]
+    fn window_labels_follow_api_durations() {
+        assert_eq!(format_window_label(3600), "1 hour");
+        assert_eq!(format_window_label(18000), "5 hour");
+        assert_eq!(format_window_label(604800), "Weekly");
+        assert_eq!(format_window_label(90), "90s");
     }
 
     #[test]
