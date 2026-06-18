@@ -4,6 +4,9 @@ Stable releases publish the same version to GitHub Releases, npm, and crates.io.
 The release workflow is intentionally fail-closed: a missing publisher
 configuration or failed registry upload fails the workflow.
 
+Generated checksums are published as GitHub Release assets. The tag-triggered
+workflow never commits or pushes generated files back to `main`.
+
 ## crates.io Initial Publish
 
 crates.io trusted publishing can only be configured after the crate exists.
