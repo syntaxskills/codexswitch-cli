@@ -132,7 +132,6 @@ Auth files and export bundles contain secrets. Keep them private.
 
 ## Roadmap
 
-- Polish the terminal UI for clearer, more attractive file-related output.
 - Improve `status` with richer usage details, exploring the `codex-limit`
   methodology and ideas from
   [`codex-profiles` PR #24](https://github.com/midhunmonachan/codex-profiles/pull/24).
