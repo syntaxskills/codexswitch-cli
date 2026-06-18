@@ -443,7 +443,7 @@ fn render_entries_preserves_ansi_display_in_color_mode() {
     assert!(lines[0].contains("\u{1b}[32m"));
     assert_eq!(
         crate::ui::strip_ansi(&lines[0]),
-        "alpha@example.com [files: auth.json]"
+        "alpha@example.com · Credentials"
     );
 }
 

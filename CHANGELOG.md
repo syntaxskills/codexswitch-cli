@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   success and error envelopes
 - split profile JSON rendering and CLI JSON contract tests into focused
   modules without changing public interfaces
+- replaced raw profile filenames in terminal output with concise Credentials
+  and Settings labels while preserving filenames in JSON output
 
 ## [2.0.0] - 2026-06-18
 

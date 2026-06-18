@@ -632,8 +632,8 @@ fn ui_save_command() {
     let output = env.run(&["save", "--label", "alpha"]);
     assert!(output.contains("Saved profile"));
     assert!(output.contains("alpha@example.com"));
-    assert!(output.contains("[files: auth.json]"));
-    assert!(output.contains("\n [files: auth.json]"));
+    assert!(output.contains("Includes  Credentials"));
+    assert!(!output.contains("auth.json"));
     let id = profile_id_by_label(&env, "alpha");
     assert_snowflake_id(&id);
     let profile_path = profile_auth_path(&env, &id);
@@ -657,8 +657,9 @@ command = "server"
     let output = env.run(&["save", "--label", "alpha", "--include-config"]);
 
     assert!(output.contains("Saved profile"));
-    assert!(output.contains("[files: auth.json + config.toml]"));
-    assert!(output.contains("\n [files: auth.json + config.toml]"));
+    assert!(output.contains("Includes  Credentials + Settings"));
+    assert!(!output.contains("auth.json"));
+    assert!(!output.contains("config.toml"));
     let id = profile_id_by_label(&env, "alpha");
     assert_snowflake_id(&id);
     let profile_path = profile_auth_path(&env, &id);
@@ -1627,8 +1628,8 @@ fn ui_load_command() {
     let output = env.run(&["load", "--label", "beta"]);
     assert!(output.contains("Loaded profile"));
     assert!(output.contains("beta@example.com"));
-    assert!(output.contains("[files: auth.json]"));
-    assert!(output.contains("\n [files: auth.json]"));
+    assert!(output.contains("Includes  Credentials"));
+    assert!(!output.contains("auth.json"));
     assert!(env.read_auth().contains(BETA_ACCOUNT));
 }
 
@@ -1670,8 +1671,9 @@ command = "server"
     let output = env.run(&["load", "--label", "alpha"]);
 
     assert!(output.contains("Loaded profile"));
-    assert!(output.contains("[files: auth.json + config.toml]"));
-    assert!(output.contains("\n [files: auth.json + config.toml]"));
+    assert!(output.contains("Includes  Credentials + Settings"));
+    assert!(!output.contains("auth.json"));
+    assert!(!output.contains("config.toml"));
     assert!(env.read_auth().contains(ALPHA_ACCOUNT));
     assert!(env.read_config().contains("alpha-provider.example"));
     assert!(!env.read_config().contains("beta-runtime.example"));
@@ -1747,7 +1749,8 @@ fn ui_load_auth_only_profile_does_not_restore_config() {
 
     let output = env.run(&["load", "--label", "alpha"]);
 
-    assert!(output.contains("[files: auth.json]"));
+    assert!(output.contains("Includes  Credentials"));
+    assert!(!output.contains("auth.json"));
     assert!(env.read_auth().contains(ALPHA_ACCOUNT));
     assert!(env.read_config().contains("beta-runtime.example"));
 }
@@ -1995,7 +1998,8 @@ fn ui_list_command() {
     let output = env.run(&["list"]);
     assert!(output.contains("current@example.com"));
     assert!(output.contains("<- active"));
-    assert!(output.contains("[files: auth.json]"));
+    assert!(output.contains("Credentials"));
+    assert!(!output.contains("auth.json"));
     assert!(output.contains("Warning: This profile is not saved yet."));
     assert!(output.contains("Run `codexswitch-cli save` to save this profile."));
     assert!(output.contains("alpha@example.com"));
@@ -2093,8 +2097,10 @@ fn ui_list_shows_and_serializes_managed_files() {
     let beta_id = profile_id_by_label(&env, "beta");
 
     let output = env.run(&["list"]);
-    assert!(output.contains("[files: auth.json]"));
-    assert!(output.contains("[files: auth.json + config.toml]"));
+    assert!(output.contains("Credentials"));
+    assert!(output.contains("Credentials + Settings"));
+    assert!(!output.contains("auth.json"));
+    assert!(!output.contains("config.toml"));
 
     let json: serde_json::Value = parse_json_success(&env.run(&["list", "--json"]), "list");
     let profiles = json

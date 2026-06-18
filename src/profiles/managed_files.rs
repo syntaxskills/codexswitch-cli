@@ -70,12 +70,23 @@ pub(super) fn managed_files_contains_config(files: &[String]) -> bool {
 }
 
 pub(super) fn format_managed_files(files: &[String]) -> String {
-    files.join(" + ")
+    let mut labels = Vec::new();
+    for file in files {
+        let label = match file.as_str() {
+            AUTH_FILE_NAME => "Credentials",
+            CONFIG_FILE_NAME => "Settings",
+            _ => "Additional data",
+        };
+        if !labels.contains(&label) {
+            labels.push(label);
+        }
+    }
+    labels.join(" + ")
 }
 
 pub(super) fn format_managed_files_suffix(files: &[String], use_color: bool) -> String {
     style_text(
-        &format!(" [files: {}]", format_managed_files(files)),
+        &format!(" · {}", format_managed_files(files)),
         use_color,
         |text| text.dimmed(),
     )
@@ -83,7 +94,7 @@ pub(super) fn format_managed_files_suffix(files: &[String], use_color: bool) -> 
 
 pub(super) fn format_managed_files_line(files: &[String], use_color: bool) -> String {
     style_text(
-        &format!("[files: {}]", format_managed_files(files)),
+        &format!("Includes  {}", format_managed_files(files)),
         use_color,
         |text| text.dimmed(),
     )
@@ -99,4 +110,42 @@ pub(super) fn remove_profile_config_if_present(path: &Path) -> Result<(), String
             path.display()
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn managed_file_labels_hide_storage_details() {
+        assert_eq!(
+            format_managed_files(&managed_files_for_save(false)),
+            "Credentials"
+        );
+        assert_eq!(
+            format_managed_files(&managed_files_for_save(true)),
+            "Credentials + Settings"
+        );
+        assert_eq!(
+            format_managed_files(&[
+                AUTH_FILE_NAME.to_string(),
+                "provider.json".to_string(),
+                "metadata.json".to_string(),
+            ]),
+            "Credentials + Additional data"
+        );
+    }
+
+    #[test]
+    fn managed_file_presentations_are_terminal_friendly() {
+        let files = managed_files_for_save(true);
+        assert_eq!(
+            format_managed_files_line(&files, false),
+            "Includes  Credentials + Settings"
+        );
+        assert_eq!(
+            format_managed_files_suffix(&files, false),
+            " · Credentials + Settings"
+        );
+    }
 }
