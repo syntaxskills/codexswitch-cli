@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Dependabot coverage for Cargo, npm, and GitHub Actions
 - unified every `--json` response under schema version 1 with consistent
   success and error envelopes
+- split profile JSON rendering and CLI JSON contract tests into focused
+  modules without changing public interfaces
 
 ## [2.0.0] - 2026-06-18
 

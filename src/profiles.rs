@@ -17,13 +17,13 @@ use crate::{
     PROFILE_ERR_CURRENT_NOT_SAVED, PROFILE_ERR_DELETE_CONFIRM_REQUIRED, PROFILE_ERR_FAILED_DELETE,
     PROFILE_ERR_ID_NO_MATCH, PROFILE_ERR_LABEL_EMPTY, PROFILE_ERR_LABEL_NO_MATCH,
     PROFILE_ERR_PROMPT_CONTEXT, PROFILE_ERR_PROMPT_DELETE, PROFILE_ERR_PROMPT_LOAD,
-    PROFILE_ERR_SELECTED_INVALID, PROFILE_ERR_SERIALIZE_INDEX, PROFILE_ERR_TTY_REQUIRED,
-    PROFILE_LOAD_HELP, PROFILE_MSG_DELETED_COUNT, PROFILE_MSG_DELETED_WITH,
-    PROFILE_MSG_LABEL_CLEARED, PROFILE_MSG_LABEL_SET, PROFILE_MSG_LOADED_WITH,
-    PROFILE_MSG_NOT_FOUND, PROFILE_MSG_SAVED, PROFILE_MSG_SAVED_WITH, PROFILE_PROMPT_CANCEL,
-    PROFILE_PROMPT_CONTINUE_WITHOUT_SAVING, PROFILE_PROMPT_DELETE_MANY, PROFILE_PROMPT_DELETE_ONE,
-    PROFILE_PROMPT_DELETE_SELECTED, PROFILE_PROMPT_SAVE_AND_CONTINUE, PROFILE_SUMMARY_AUTH_ERROR,
-    PROFILE_SUMMARY_ERROR, PROFILE_SUMMARY_FILE_MISSING, PROFILE_SUMMARY_USAGE_ERROR,
+    PROFILE_ERR_SELECTED_INVALID, PROFILE_ERR_TTY_REQUIRED, PROFILE_LOAD_HELP,
+    PROFILE_MSG_DELETED_COUNT, PROFILE_MSG_DELETED_WITH, PROFILE_MSG_LABEL_CLEARED,
+    PROFILE_MSG_LABEL_SET, PROFILE_MSG_LOADED_WITH, PROFILE_MSG_NOT_FOUND, PROFILE_MSG_SAVED,
+    PROFILE_MSG_SAVED_WITH, PROFILE_PROMPT_CANCEL, PROFILE_PROMPT_CONTINUE_WITHOUT_SAVING,
+    PROFILE_PROMPT_DELETE_MANY, PROFILE_PROMPT_DELETE_ONE, PROFILE_PROMPT_DELETE_SELECTED,
+    PROFILE_PROMPT_SAVE_AND_CONTINUE, PROFILE_SUMMARY_AUTH_ERROR, PROFILE_SUMMARY_ERROR,
+    PROFILE_SUMMARY_FILE_MISSING, PROFILE_SUMMARY_USAGE_ERROR,
     PROFILE_WARN_CURRENT_NOT_SAVED_REASON, UI_ERROR_PREFIX, UI_ERROR_TWO_LINE,
 };
 use crate::{
@@ -46,6 +46,7 @@ mod config_snapshot;
 mod identity;
 mod import_export;
 mod index;
+mod json_output;
 mod labels;
 mod managed_files;
 mod paths;
@@ -72,6 +73,7 @@ pub(crate) use store::{
 };
 
 use config_snapshot::{apply_config_snapshot, write_config_snapshot};
+use json_output::{print_all_status_json, print_current_status_json, print_list_json};
 use labels::{labels_by_id, prune_labels, resolve_label_target_id};
 use managed_files::*;
 use paths::*;
@@ -1724,244 +1726,6 @@ struct Entry {
     error_summary: Option<String>,
     always_show_details: bool,
     is_current: bool,
-}
-
-#[derive(Serialize)]
-struct ListedProfile {
-    id: Option<String>,
-    label: Option<String>,
-    email: Option<String>,
-    plan: Option<String>,
-    is_current: bool,
-    is_saved: bool,
-    is_api_key: bool,
-    managed_files: Vec<String>,
-    error: Option<String>,
-}
-
-#[derive(Serialize)]
-struct ListedProfiles {
-    profiles: Vec<ListedProfile>,
-}
-
-#[derive(Serialize)]
-struct StatusProfileJson {
-    id: Option<String>,
-    label: Option<String>,
-    email: Option<String>,
-    plan: Option<String>,
-    is_current: bool,
-    is_saved: bool,
-    is_api_key: bool,
-    managed_files: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    warnings: Vec<String>,
-    usage: Option<StatusUsageJson>,
-    error: Option<StatusErrorJson>,
-}
-
-#[derive(Serialize)]
-struct StatusErrorJson {
-    summary: StatusErrorSummaryJson,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    status_code: Option<u16>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    detail: Option<String>,
-}
-
-#[derive(Serialize)]
-struct StatusErrorSummaryJson {
-    message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    response: Option<serde_json::Value>,
-}
-
-#[derive(Serialize)]
-struct AllStatusJson {
-    profiles: Vec<StatusProfileJson>,
-}
-
-fn print_list_json(entries: &[Entry]) -> Result<(), String> {
-    let profiles = entries
-        .iter()
-        .map(|entry| ListedProfile {
-            id: entry.id.clone(),
-            label: entry.label.clone(),
-            email: entry.email.clone(),
-            plan: entry.plan.clone(),
-            is_current: entry.is_current,
-            is_saved: entry.is_saved,
-            is_api_key: entry.is_api_key,
-            managed_files: entry.managed_files.clone(),
-            error: entry.error_summary.clone(),
-        })
-        .collect();
-    JsonEnvelope::success(
-        "list",
-        serde_json::to_value(ListedProfiles { profiles })
-            .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?,
-    )
-    .print()
-}
-
-fn status_error_summary_json(summary: String) -> StatusErrorSummaryJson {
-    let summary = crate::sanitize_for_terminal(&summary);
-    let Some((start, end, response)) = extract_embedded_json_object(&summary) else {
-        return StatusErrorSummaryJson {
-            message: summary,
-            response: None,
-        };
-    };
-
-    StatusErrorSummaryJson {
-        message: strip_embedded_json_segment(&summary, start, end),
-        response: Some(response),
-    }
-}
-
-fn extract_embedded_json_object(summary: &str) -> Option<(usize, usize, serde_json::Value)> {
-    for (start, ch) in summary.char_indices() {
-        if ch != '{' {
-            continue;
-        }
-        let Some(end) = find_json_object_end(summary, start) else {
-            continue;
-        };
-        let candidate = &summary[start..end];
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(candidate) else {
-            continue;
-        };
-        return Some((start, end, value));
-    }
-    None
-}
-
-fn find_json_object_end(text: &str, start: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
-
-    for (offset, ch) in text[start..].char_indices() {
-        let idx = start + offset;
-        if in_string {
-            if escaped {
-                escaped = false;
-                continue;
-            }
-            match ch {
-                '\\' => escaped = true,
-                '"' => in_string = false,
-                _ => {}
-            }
-            continue;
-        }
-
-        match ch {
-            '"' => in_string = true,
-            '{' => depth += 1,
-            '}' => {
-                if depth == 0 {
-                    return None;
-                }
-                depth -= 1;
-                if depth == 0 {
-                    return Some(idx + ch.len_utf8());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    None
-}
-
-fn strip_embedded_json_segment(text: &str, start: usize, end: usize) -> String {
-    let left = text[..start].trim_end_matches([' ', ':']);
-    let right = text[end..].trim_start_matches([',', ' ']);
-    match (left.is_empty(), right.is_empty()) {
-        (true, true) => String::new(),
-        (true, false) => right.to_string(),
-        (false, true) => left.to_string(),
-        (false, false) => format!("{left}, {right}"),
-    }
-}
-
-fn status_profile_json(entry: Entry) -> StatusProfileJson {
-    let mut usage = entry.usage.map(|usage| StatusUsageJson {
-        state: usage.state,
-        buckets: usage.buckets,
-        status_code: usage.status_code,
-        summary: usage
-            .summary
-            .map(|summary| crate::sanitize_for_terminal(&summary)),
-        detail: usage
-            .detail
-            .map(|detail| crate::sanitize_for_terminal(&detail)),
-    });
-    let mut top_level_summary = entry
-        .error_summary
-        .map(|error| crate::sanitize_for_terminal(&error));
-    let mut error = None;
-    if let Some(usage_json) = usage.as_mut()
-        && usage_json.state == "error"
-    {
-        let status_code = usage_json.status_code.take();
-        let detail = usage_json.detail.take();
-        let usage_summary = usage_json.summary.take();
-        let summary = top_level_summary.take().or(usage_summary);
-        error = summary.map(|summary| StatusErrorJson {
-            summary: status_error_summary_json(summary),
-            status_code,
-            detail,
-        });
-    }
-    if error.is_none() {
-        error = top_level_summary.map(|summary| StatusErrorJson {
-            summary: status_error_summary_json(summary),
-            status_code: None,
-            detail: None,
-        });
-    }
-
-    StatusProfileJson {
-        id: entry.id,
-        label: entry.label,
-        email: entry.email,
-        plan: entry.plan,
-        is_current: entry.is_current,
-        is_saved: entry.is_saved,
-        is_api_key: entry.is_api_key,
-        managed_files: entry.managed_files,
-        warnings: entry
-            .warnings
-            .into_iter()
-            .map(|warning| crate::sanitize_for_terminal(&warning))
-            .collect(),
-        usage,
-        error,
-    }
-}
-
-fn print_current_status_json(current: Option<Entry>) -> Result<(), String> {
-    let payload = current.map(status_profile_json);
-    JsonEnvelope::success(
-        "status",
-        serde_json::to_value(payload)
-            .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?,
-    )
-    .print()
-}
-
-fn print_all_status_json(profiles: Vec<Entry>) -> Result<(), String> {
-    let payload = AllStatusJson {
-        profiles: profiles.into_iter().map(status_profile_json).collect(),
-    };
-    JsonEnvelope::success(
-        "status",
-        serde_json::to_value(payload)
-            .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?,
-    )
-    .print()
 }
 
 fn handle_inquire_result<T>(
