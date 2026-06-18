@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - made `rust-toolchain.toml` the workflow toolchain source and added an
   executable check that keeps it aligned with the package MSRV
 - refreshed compatible Rust dependencies, migrated `shlex` to 2.x, and added
-  Dependabot coverage for Cargo, npm, and GitHub Actions
+  Dependabot coverage for Cargo, npm, and GitHub Actions; refreshed the Rust
+  cache action to its Node 24 release
 - unified every `--json` response under schema version 1 with consistent
   success and error envelopes
 - split profile JSON rendering and CLI JSON contract tests into focused
