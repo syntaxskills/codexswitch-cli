@@ -100,10 +100,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.tag-check.outputs.tag }}
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
-        with:
-          toolchain: 1.94.0
-          components: rustfmt, clippy
+      - name: Install Rust from rust-toolchain.toml
+        run: bash scripts/check-toolchain.sh
       - uses: taiki-e/install-action@aba36d755ec7ca22d38b12111787c26115943952 # v2
         with:
           tool: cargo-audit@0.22.1
@@ -154,10 +152,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.tag-check.outputs.tag }}
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
-        with:
-          toolchain: 1.94.0
-          targets: ${{ matrix.target }}
+      - name: Install Rust from rust-toolchain.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/check-toolchain.sh
+          rustup target add "${{ matrix.target }}"
       - name: Cache cargo bin
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         continue-on-error: true
@@ -196,9 +196,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.tag-check.outputs.tag }}
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
-        with:
-          toolchain: 1.94.0
+      - name: Install Rust from rust-toolchain.toml
+        run: bash scripts/check-toolchain.sh
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 24.14.0

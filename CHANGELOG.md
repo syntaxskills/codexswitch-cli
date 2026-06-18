@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - made npm publication mandatory for stable production releases and added
   post-publish verification for all npm packages, crates.io, and GitHub Release
+- made `rust-toolchain.toml` the workflow toolchain source and added an
+  executable check that keeps it aligned with the package MSRV
+- refreshed compatible Rust dependencies, migrated `shlex` to 2.x, and added
+  Dependabot coverage for Cargo, npm, and GitHub Actions
 
 ## [2.0.0] - 2026-06-18
 

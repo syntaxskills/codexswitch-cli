@@ -15,10 +15,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
-        with:
-          toolchain: 1.94.0
+      - name: Install Rust from rust-toolchain.toml
+        run: bash scripts/check-toolchain.sh
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@aba36d755ec7ca22d38b12111787c26115943952 # v2
