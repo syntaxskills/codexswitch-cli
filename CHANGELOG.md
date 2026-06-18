@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- made npm publication mandatory for stable production releases and added
+  post-publish verification for all npm packages, crates.io, and GitHub Release
+
 ## [2.0.0] - 2026-06-18
 
 ### Added

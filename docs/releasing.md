@@ -43,6 +43,31 @@ Maintainers can verify the configuration without publishing a new version by
 running the `release` workflow for an existing stable tag with
 `verify_crates_io_trusted_publisher` enabled.
 
+## npm Trusted Publishers
+
+Every stable production release publishes the main npm package and five
+platform packages. Each package must trust the same GitHub Actions workflow:
+
+| Field | Value |
+| --- | --- |
+| Repository | `syntaxskills/codexswitch-cli` |
+| Workflow | `release.yml` |
+| Environment | leave blank |
+| Permission | `npm publish` |
+
+The required packages are:
+
+- `@syntaxskills/codexswitch-cli`
+- `@syntaxskills/codexswitch-cli-darwin-arm64`
+- `@syntaxskills/codexswitch-cli-darwin-x64`
+- `@syntaxskills/codexswitch-cli-linux-arm64`
+- `@syntaxskills/codexswitch-cli-linux-x64`
+- `@syntaxskills/codexswitch-cli-win32-x64`
+
+The release workflow publishes platform packages before the main package and
+then verifies all six npm versions, crates.io, and the GitHub Release before
+succeeding.
+
 ## Recovery
 
 The release workflow accepts an existing tag through `workflow_dispatch`.

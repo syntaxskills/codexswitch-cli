@@ -298,15 +298,9 @@ jobs:
           cargo publish --locked --token "${CARGO_REGISTRY_TOKEN}"
 
       - name: Publish to npm
-        if: ${{ needs.tag-check.outputs.prerelease != 'true' && vars.NPM_PUBLISH == 'true' }}
+        if: ${{ needs.tag-check.outputs.prerelease != 'true' && github.repository == 'syntaxskills/codexswitch-cli' }}
         run: |
           set -euo pipefail
-          # Safety gate: only publish from production repository
-          if [[ "${GITHUB_REPOSITORY}" != "syntaxskills/codexswitch-cli" ]]; then
-            echo "Skipping npm publish: not production repository (current: ${GITHUB_REPOSITORY})"
-            exit 0
-          fi
-
           echo "Publishing to npm from ${GITHUB_REPOSITORY} via trusted publishing..."
           node --version
           npm_version="$(npm --version)"
@@ -360,3 +354,66 @@ jobs:
             dist/checksums/*
           generate_release_notes: true
           prerelease: ${{ needs.tag-check.outputs.prerelease == 'true' }}
+
+      - name: Verify stable release channels
+        if: ${{ needs.tag-check.outputs.prerelease != 'true' && github.repository == 'syntaxskills/codexswitch-cli' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.tag-check.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.tag-check.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npm_packages=(
+            "@syntaxskills/codexswitch-cli"
+            "@syntaxskills/codexswitch-cli-darwin-arm64"
+            "@syntaxskills/codexswitch-cli-darwin-x64"
+            "@syntaxskills/codexswitch-cli-linux-arm64"
+            "@syntaxskills/codexswitch-cli-linux-x64"
+            "@syntaxskills/codexswitch-cli-win32-x64"
+          )
+
+          retry() {
+            local description="$1"
+            shift
+
+            for attempt in {1..12}; do
+              if "$@"; then
+                echo "Verified ${description}"
+                return 0
+              fi
+              echo "Waiting for ${description} (attempt ${attempt}/12)"
+              sleep 10
+            done
+
+            echo "Failed to verify ${description}" >&2
+            return 1
+          }
+
+          verify_crates_io() {
+            curl --fail --silent --show-error \
+              -H "User-Agent: ${GITHUB_REPOSITORY}" \
+              "https://crates.io/api/v1/crates/codexswitch-cli/${RELEASE_VERSION}" \
+              >/dev/null
+          }
+
+          verify_npm_package() {
+            local package="$1"
+            [[ "$(npm view "${package}@${RELEASE_VERSION}" version 2>/dev/null)" == "${RELEASE_VERSION}" ]]
+          }
+
+          verify_github_release() {
+            gh release view "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json isDraft,isPrerelease,tagName \
+              | jq --exit-status --arg tag "${RELEASE_TAG}" \
+                '.tagName == $tag and .isDraft == false and .isPrerelease == false' \
+                >/dev/null
+          }
+
+          retry "crates.io codexswitch-cli ${RELEASE_VERSION}" verify_crates_io
+          for package in "${npm_packages[@]}"; do
+            retry "npm ${package}@${RELEASE_VERSION}" verify_npm_package "${package}"
+          done
+          retry "GitHub Release ${RELEASE_TAG}" verify_github_release
