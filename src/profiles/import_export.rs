@@ -10,7 +10,7 @@ use super::{
     profile_config_path_for_id, profile_path_for_id, remove_profile_dir_if_empty,
     resolve_label_target_id, update_profiles_index_entry, use_color_stderr, use_color_stdout,
 };
-use crate::json_response::CommandResultJson;
+use crate::json_response::JsonEnvelope;
 use crate::{
     AuthFile, PROFILE_ERR_ID_NO_MATCH, PROFILE_ERR_READ_PROFILES_DIR, Paths, is_profile_ready,
     tokens_from_api_key,
@@ -103,7 +103,7 @@ pub(crate) fn export_profiles(
     let noun = if count == 1 { "profile" } else { "profiles" };
 
     if json {
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "export",
             serde_json::json!({
                 "path": output.display().to_string(),
@@ -213,7 +213,7 @@ pub(crate) fn import_profiles(paths: &Paths, input: PathBuf, json: bool) -> Resu
                 })
             })
             .collect();
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "import",
             serde_json::json!({
                 "count": count,

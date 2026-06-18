@@ -140,6 +140,7 @@ Auth files and export bundles contain secrets. Keep them private.
 ## Docs
 
 - [Full usage guide](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/usage.md)
+- [JSON output contract](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/json-output.md)
 - [Release verification](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/verification.md)
 - [Contributing](https://github.com/syntaxskills/codexswitch-cli/blob/main/CONTRIBUTING.md)
 

@@ -9,7 +9,7 @@ pub struct Cli {
     /// Disable styling and separators
     #[arg(long, global = true)]
     pub plain: bool,
-    /// Print machine-readable JSON success output
+    /// Print versioned machine-readable JSON output
     #[arg(long, global = true)]
     pub json: bool,
     #[command(subcommand)]
@@ -182,7 +182,7 @@ pub fn label_clear_usage(name: &str) -> String {
 
 fn examples_root(name: &str) -> String {
     format!(
-        "Examples:\n  {name} save --label work\n  {name} save --label third-party --include-config\n  {name} load --label work\n  {name} list --json\n  {name} status --all --json\n  {name} export --output profiles-export.json\n  {name} import --input profiles-export.json\n  {name} delete --label work --yes\n\nUse `--json` for machine-readable success output. Run `{name} help <command>` for command-specific options."
+        "Examples:\n  {name} save --label work\n  {name} save --label third-party --include-config\n  {name} load --label work\n  {name} list --json\n  {name} status --all --json\n  {name} export --output profiles-export.json\n  {name} import --input profiles-export.json\n  {name} delete --label work --yes\n\nUse `--json` for versioned machine-readable output. Run `{name} help <command>` for command-specific options."
     )
 }
 
@@ -194,7 +194,7 @@ mod tests {
     fn examples_root_uses_clear_professional_headings() {
         let text = examples_root("codexswitch-cli");
         assert!(text.contains("Examples:"));
-        assert!(text.contains("Use `--json` for machine-readable success output."));
+        assert!(text.contains("Use `--json` for versioned machine-readable output."));
         assert!(!text.contains("Common options:"));
         assert!(!text.contains("Machine-readable output:"));
     }

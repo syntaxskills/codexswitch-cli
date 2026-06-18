@@ -1,39 +1,50 @@
 use serde::{Deserialize, Serialize};
 
-/// Unified JSON response for mutating commands (`save`, `load`, `delete`, `label`, `default`, `export`, `import`).
-///
-/// On success `profile` is present; on error callers return `Err(...)` which the CLI runner
-/// serialises via the standard `eprintln!` + `exit(1)` path. The `--json` flag only changes
-/// the success output — errors remain text on stderr so scripts can distinguish them via exit
-/// code without needing to parse stderr JSON.
+pub const JSON_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CommandResultJson {
-    /// The command name (e.g. "save", "load", "delete", "export", "import").
-    pub command: String,
-    /// `true` when the operation succeeded.
-    pub success: bool,
-    /// Resulting data — profile details for profile-mutating commands, summary object for
-    /// export/import. Always present when `success` is `true`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub profile: Option<serde_json::Value>,
+pub struct JsonError {
+    pub message: String,
 }
 
-impl CommandResultJson {
-    /// Construct a success response carrying `data` as the `profile` field.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonEnvelope {
+    pub schema_version: u32,
+    pub command: String,
+    pub success: bool,
+    pub data: serde_json::Value,
+    pub error: Option<JsonError>,
+}
+
+impl JsonEnvelope {
     pub fn success(command: &str, data: serde_json::Value) -> Self {
         Self {
+            schema_version: JSON_SCHEMA_VERSION,
             command: command.to_string(),
             success: true,
-            profile: Some(data),
+            data,
+            error: None,
         }
     }
 
-    /// Serialize `self` to pretty-printed JSON and print it to stdout.
+    pub fn failure(command: &str, message: impl Into<String>) -> Self {
+        Self {
+            schema_version: JSON_SCHEMA_VERSION,
+            command: command.to_string(),
+            success: false,
+            data: serde_json::Value::Null,
+            error: Some(JsonError {
+                message: message.into(),
+            }),
+        }
+    }
+
+    pub fn to_pretty_string(&self) -> Result<String, String> {
+        serde_json::to_string_pretty(self).map_err(|err| err.to_string())
+    }
+
     pub fn print(&self) -> Result<(), String> {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(self).map_err(|e| e.to_string())?
-        );
+        println!("{}", self.to_pretty_string()?);
         Ok(())
     }
 }

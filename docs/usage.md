@@ -47,6 +47,9 @@ codexswitch-cli --json <command>
 codexswitch-cli --plain <command>
 ```
 
+JSON output uses a versioned envelope for both successes and failures. See the
+[JSON output contract](json-output.md) for the schema and compatibility policy.
+
 ## Storage Notes
 
 - Profiles are auth-only by default.

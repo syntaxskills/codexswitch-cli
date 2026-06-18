@@ -5,6 +5,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use crate::json_response::JsonEnvelope;
 use crate::{
     InstallSource, Paths, current_saved_id, detect_install_source, is_profile_ready, lock_usage,
     print_output_block, profile_files, profile_id_from_path, read_tokens, repair_profiles_metadata,
@@ -239,9 +240,11 @@ fn print_doctor_json(
         repairs,
         error,
     };
-    let json = serde_json::to_string_pretty(&payload).map_err(|err| err.to_string())?;
-    println!("{json}");
-    Ok(())
+    JsonEnvelope::success(
+        "doctor",
+        serde_json::to_value(payload).map_err(|err| err.to_string())?,
+    )
+    .print()
 }
 
 fn inspect_install(_paths: &Paths) -> [Check; 2] {

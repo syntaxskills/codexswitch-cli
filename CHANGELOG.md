@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   executable check that keeps it aligned with the package MSRV
 - refreshed compatible Rust dependencies, migrated `shlex` to 2.x, and added
   Dependabot coverage for Cargo, npm, and GitHub Actions
+- unified every `--json` response under schema version 1 with consistent
+  success and error envelopes
 
 ## [2.0.0] - 2026-06-18
 

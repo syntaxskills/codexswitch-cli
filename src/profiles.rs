@@ -10,7 +10,7 @@ use std::fs;
 use std::io::{self, IsTerminal as _};
 use std::path::{Path, PathBuf};
 
-use crate::json_response::CommandResultJson;
+use crate::json_response::JsonEnvelope;
 use crate::{
     AUTH_ERR_INCOMPLETE_ACCOUNT, AUTH_ERR_PROFILE_MISSING_EMAIL_PLAN, PROFILE_COPY_CONTEXT_LOAD,
     PROFILE_COPY_CONTEXT_SAVE, PROFILE_DELETE_HELP, PROFILE_ERR_COPY_CONTEXT,
@@ -132,7 +132,7 @@ pub fn save_profile(
     store.save(paths)?;
 
     if json {
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "save",
             serde_json::json!({
                 "id": id,
@@ -177,7 +177,7 @@ pub fn set_profile_label(
     store.save(paths)?;
 
     if json {
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "label set",
             serde_json::json!({
                 "id": target_id,
@@ -210,7 +210,7 @@ pub fn clear_profile_label(
     store.save(paths)?;
 
     if json {
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "label clear",
             serde_json::json!({
                 "id": target_id,
@@ -245,7 +245,7 @@ pub fn rename_profile_label(
     store.save(paths)?;
 
     if json {
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "label rename",
             serde_json::json!({
                 "id": target_id,
@@ -373,7 +373,7 @@ pub fn load_profile(
     store.save(paths)?;
 
     if json {
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "load",
             serde_json::json!({
                 "id": selected_id,
@@ -453,7 +453,7 @@ pub fn delete_profile(
             .zip(displays.iter())
             .map(|(id, display)| serde_json::json!({ "id": id, "display": display }))
             .collect();
-        let result = CommandResultJson::success(
+        let result = JsonEnvelope::success(
             "delete",
             serde_json::json!({
                 "count": selected_ids.len(),
@@ -1796,10 +1796,12 @@ fn print_list_json(entries: &[Entry]) -> Result<(), String> {
             error: entry.error_summary.clone(),
         })
         .collect();
-    let json = serde_json::to_string_pretty(&ListedProfiles { profiles })
-        .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?;
-    println!("{json}");
-    Ok(())
+    JsonEnvelope::success(
+        "list",
+        serde_json::to_value(ListedProfiles { profiles })
+            .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?,
+    )
+    .print()
 }
 
 fn status_error_summary_json(summary: String) -> StatusErrorSummaryJson {
@@ -1942,20 +1944,24 @@ fn status_profile_json(entry: Entry) -> StatusProfileJson {
 
 fn print_current_status_json(current: Option<Entry>) -> Result<(), String> {
     let payload = current.map(status_profile_json);
-    let json = serde_json::to_string_pretty(&payload)
-        .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?;
-    println!("{json}");
-    Ok(())
+    JsonEnvelope::success(
+        "status",
+        serde_json::to_value(payload)
+            .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?,
+    )
+    .print()
 }
 
 fn print_all_status_json(profiles: Vec<Entry>) -> Result<(), String> {
     let payload = AllStatusJson {
         profiles: profiles.into_iter().map(status_profile_json).collect(),
     };
-    let json = serde_json::to_string_pretty(&payload)
-        .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?;
-    println!("{json}");
-    Ok(())
+    JsonEnvelope::success(
+        "status",
+        serde_json::to_value(payload)
+            .map_err(|err| crate::msg1(PROFILE_ERR_SERIALIZE_INDEX, err))?,
+    )
+    .print()
 }
 
 fn handle_inquire_result<T>(

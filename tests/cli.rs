@@ -1022,8 +1022,7 @@ fn ui_import_profiles_command() {
     let index = read_json_file(&dest.profiles_dir().join("profiles.json"));
     assert!(index.get("default_profile_id").is_none());
 
-    let json: serde_json::Value =
-        serde_json::from_str(&dest.run(&["list", "--json"])).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&dest.run(&["list", "--json"]), "list");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -1125,8 +1124,7 @@ fn ui_import_rejects_existing_id_conflict() {
     assert!(err.contains(BETA_ID));
     assert!(err.contains("already exists"));
 
-    let json: serde_json::Value =
-        serde_json::from_str(&dest.run(&["list", "--json"])).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&dest.run(&["list", "--json"]), "list");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -1158,8 +1156,7 @@ fn ui_import_rejects_existing_label_conflict() {
     let err = dest.run_expect_error(&["import", "--input", export_path.to_str().unwrap()]);
     assert!(err.contains("Label 'alpha' already exists"));
 
-    let json: serde_json::Value =
-        serde_json::from_str(&dest.run(&["list", "--json"])).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&dest.run(&["list", "--json"]), "list");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -1229,8 +1226,7 @@ fn ui_import_rejects_unsafe_profile_id() {
     let err = dest.run_expect_error(&["import", "--input", export_path.to_str().unwrap()]);
     assert!(err.contains("Imported profile id '../auth' is not safe"));
 
-    let json: serde_json::Value =
-        serde_json::from_str(&dest.run(&["list", "--json"])).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&dest.run(&["list", "--json"]), "list");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -1269,8 +1265,7 @@ fn ui_import_rejects_reserved_profile_id() {
         let err = dest.run_expect_error(&["import", "--input", export_path.to_str().unwrap()]);
         assert!(err.contains(&format!("Imported profile id '{reserved}' is reserved")));
 
-        let json: serde_json::Value =
-            serde_json::from_str(&dest.run(&["list", "--json"])).expect("parse list json");
+        let json: serde_json::Value = parse_json_success(&dest.run(&["list", "--json"]), "list");
         let profiles = json
             .get("profiles")
             .and_then(|value| value.as_array())
@@ -1346,7 +1341,7 @@ fn ui_doctor_reports_invalid_profile_file_and_index() {
 fn ui_doctor_json_missing_state() {
     let env = TestEnv::new();
     let output = env.run(&["doctor", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse doctor json");
+    let json: serde_json::Value = parse_json_success(&output, "doctor");
     let checks = json
         .get("checks")
         .and_then(|value| value.as_array())
@@ -1370,7 +1365,7 @@ fn ui_doctor_json_saved_current_profile() {
     let env = TestEnv::new();
     seed_profiles(&env);
     let output = env.run(&["doctor", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse doctor json");
+    let json: serde_json::Value = parse_json_success(&output, "doctor");
     let checks = json
         .get("checks")
         .and_then(|value| value.as_array())
@@ -1422,8 +1417,7 @@ fn ui_doctor_fix_rebuilds_invalid_index() {
     assert!(output.contains("Rebuilt invalid profiles index"));
     assert!(env.profiles_dir().join("profiles.json.bak").is_file());
 
-    let json: serde_json::Value =
-        serde_json::from_str(&env.run(&["list", "--json"])).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&env.run(&["list", "--json"]), "list");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -1458,7 +1452,7 @@ fn ui_doctor_fix_rebuilds_invalid_index_without_clobbering_backup() {
 fn ui_doctor_fix_json_reports_repairs() {
     let env = TestEnv::new();
     let output = env.run(&["doctor", "--fix", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse doctor json");
+    let json: serde_json::Value = parse_json_success(&output, "doctor");
     let repairs = json
         .get("repairs")
         .and_then(|value| value.as_array())
@@ -1570,7 +1564,7 @@ fn ui_doctor_fix_json_noop_has_empty_repairs() {
     let env = TestEnv::new();
     seed_profiles(&env);
     let output = env.run(&["doctor", "--fix", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse doctor json");
+    let json: serde_json::Value = parse_json_success(&output, "doctor");
     let repairs = json
         .get("repairs")
         .and_then(|value| value.as_array())
@@ -1605,7 +1599,7 @@ fn ui_doctor_fix_json_storage_shape_error() {
     fs::write(env.profiles_dir(), "not-a-directory").expect("write invalid profiles path");
 
     let output = env.run(&["doctor", "--fix", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse doctor json");
+    let json: serde_json::Value = parse_json_success(&output, "doctor");
     let checks = json
         .get("checks")
         .and_then(|value| value.as_array())
@@ -2051,7 +2045,7 @@ fn ui_list_json_exposes_ids_for_scripting() {
     seed_current(&env);
 
     let output = env.run(&["list", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&output, "list");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -2102,8 +2096,7 @@ fn ui_list_shows_and_serializes_managed_files() {
     assert!(output.contains("[files: auth.json]"));
     assert!(output.contains("[files: auth.json + config.toml]"));
 
-    let json: serde_json::Value =
-        serde_json::from_str(&env.run(&["list", "--json"])).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&env.run(&["list", "--json"]), "list");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -2124,7 +2117,7 @@ fn ui_list_shows_and_serializes_managed_files() {
 fn ui_list_json_empty_profiles() {
     let env = TestEnv::new();
     let output = env.run(&["list", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse list json");
+    let json: serde_json::Value = parse_json_success(&output, "list");
     assert_eq!(json, serde_json::json!({ "profiles": [] }));
 }
 
@@ -2136,10 +2129,8 @@ fn ui_list_json_accepts_show_id_without_changing_output() {
     let plain_json = env.run(&["list", "--json"]);
     let show_id_json = env.run(&["list", "--json", "--show-id"]);
 
-    let plain: serde_json::Value =
-        serde_json::from_str(&plain_json).expect("parse plain list json");
-    let with_show_id: serde_json::Value =
-        serde_json::from_str(&show_id_json).expect("parse show-id list json");
+    let plain: serde_json::Value = parse_json_success(&plain_json, "list");
+    let with_show_id: serde_json::Value = parse_json_success(&show_id_json, "list");
 
     assert_eq!(with_show_id, plain);
 }
@@ -2283,7 +2274,7 @@ fn ui_status_json_command() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--json"]);
-    let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let profile: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(profile.get("id").unwrap(), &serde_json::json!(ALPHA_ID));
     assert_eq!(profile.get("label").unwrap(), &serde_json::json!("alpha"));
     assert_eq!(
@@ -2330,7 +2321,7 @@ fn ui_status_json_command() {
 fn ui_status_json_empty_profile() {
     let env = TestEnv::new();
     let output = env.run(&["status", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(json, serde_json::Value::Null);
 }
 
@@ -2339,7 +2330,7 @@ fn ui_status_json_unsaved_current_profile() {
     let env = TestEnv::new();
     seed_current(&env);
     let output = env.run(&["status", "--json"]);
-    let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let profile: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(profile.get("id").unwrap(), &serde_json::Value::Null);
     assert_eq!(
         profile.get("email").unwrap(),
@@ -2390,7 +2381,7 @@ fn ui_status_id_json_command() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--id", BETA_ID, "--json"]);
-    let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let profile: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(profile.get("id").unwrap(), &serde_json::json!(BETA_ID));
     assert_eq!(profile.get("label").unwrap(), &serde_json::json!("beta"));
     assert_eq!(
@@ -2416,7 +2407,7 @@ fn ui_status_label_json_command() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--label", "beta", "--json"]);
-    let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let profile: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(profile.get("id").unwrap(), &serde_json::json!(BETA_ID));
     assert_eq!(profile.get("label").unwrap(), &serde_json::json!("beta"));
 
@@ -2434,7 +2425,7 @@ fn ui_status_json_serializes_managed_files_for_config_profile() {
     let beta_id = profile_id_by_label(&env, "beta");
 
     let output = env.run(&["status", "--label", "beta", "--json"]);
-    let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let profile: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(profile.get("id").unwrap(), &serde_json::json!(beta_id));
     assert_managed_files(&profile, &["auth.json", "config.toml"]);
 
@@ -2445,7 +2436,7 @@ fn ui_status_json_serializes_managed_files_for_config_profile() {
 fn ui_status_selector_json_empty_profiles() {
     let env = TestEnv::new();
     let output = env.run(&["status", "--label", "beta", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(json, serde_json::Value::Null);
 }
 
@@ -2531,7 +2522,7 @@ fn ui_status_all_json_command() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--all", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status all json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -2583,7 +2574,7 @@ fn ui_status_json_402_exposes_structured_usage_unavailable() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--json"]);
-    let profile: serde_json::Value = serde_json::from_str(&output).expect("parse status json");
+    let profile: serde_json::Value = parse_json_success(&output, "status");
     assert!(profile.get("details").is_none());
     let error = profile.get("error").expect("error object");
     let summary = error
@@ -2624,7 +2615,7 @@ fn ui_status_all_json_includes_api_profiles() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--all", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status all json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -2659,7 +2650,7 @@ fn ui_status_all_json_includes_api_profiles() {
 fn ui_status_all_json_empty_profiles() {
     let env = TestEnv::new();
     let output = env.run(&["status", "--all", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status all json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     assert_eq!(
         json,
         serde_json::json!({
@@ -2688,7 +2679,7 @@ fn ui_status_all_json_includes_errored_profiles_by_default() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--all", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status all json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -2724,7 +2715,7 @@ fn ui_status_all_json_includes_errored_profiles() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--all", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status all json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -2770,7 +2761,7 @@ fn ui_status_all_json_402_exposes_structured_usage_error() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--all", "--json"]);
-    let payload: serde_json::Value = serde_json::from_str(&output).expect("parse status all json");
+    let payload: serde_json::Value = parse_json_success(&output, "status");
     let profiles = payload
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -3035,7 +3026,7 @@ fn ui_status_all_json_includes_current_api_profile() {
     env.write_config(&format!("http://{usage_addr}/backend-api"));
 
     let output = env.run(&["status", "--all", "--json"]);
-    let json: serde_json::Value = serde_json::from_str(&output).expect("parse status all json");
+    let json: serde_json::Value = parse_json_success(&output, "status");
     let profiles = json
         .get("profiles")
         .and_then(|value| value.as_array())
@@ -3211,6 +3202,19 @@ fn parse_json(output: &str) -> serde_json::Value {
         .unwrap_or_else(|e| panic!("Expected valid JSON output, got: {output:?}\nError: {e}"))
 }
 
+fn assert_json_success<'a>(value: &'a serde_json::Value, command: &str) -> &'a serde_json::Value {
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["command"], command);
+    assert_eq!(value["success"], true);
+    assert!(value["error"].is_null());
+    &value["data"]
+}
+
+fn parse_json_success(output: &str, command: &str) -> serde_json::Value {
+    let envelope = parse_json(output);
+    assert_json_success(&envelope, command).clone()
+}
+
 #[test]
 fn json_save_returns_success_shape() {
     let env = TestEnv::new();
@@ -3219,9 +3223,7 @@ fn json_save_returns_success_shape() {
     let raw = env.run(&["save", "--label", "work", "--json"]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "save", "command field");
-    assert_eq!(v["success"], true, "success field");
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "save");
     assert!(profile["id"].is_string(), "profile.id is string");
     assert_eq!(profile["label"], "work", "profile.label");
     assert_managed_files(profile, &["auth.json"]);
@@ -3237,9 +3239,7 @@ fn json_load_returns_success_shape() {
     let raw = env.run(&["load", "--label", "alpha", "--json"]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "load");
-    assert_eq!(v["success"], true);
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "load");
     assert!(profile["id"].is_string());
     assert_eq!(profile["label"], "alpha");
     assert_managed_files(profile, &["auth.json"]);
@@ -3255,9 +3255,7 @@ fn json_delete_returns_success_shape() {
     let raw = env.run(&["delete", "--label", "alpha", "--yes", "--json"]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "delete");
-    assert_eq!(v["success"], true);
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "delete");
     assert!(profile["count"].is_number(), "profile.count is number");
     let deleted = profile["deleted"].as_array().expect("deleted is array");
     assert!(!deleted.is_empty(), "at least one profile deleted");
@@ -3276,9 +3274,7 @@ fn json_label_set_returns_success_shape() {
     ]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "label set");
-    assert_eq!(v["success"], true);
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "label set");
     assert!(profile["id"].is_string());
     assert_eq!(profile["label"], "newalpha");
     assert!(profile.get("default").is_none());
@@ -3294,9 +3290,7 @@ fn json_label_clear_returns_success_shape() {
     let raw = env.run(&["label", "clear", "--id", &alpha_id, "--json"]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "label clear");
-    assert_eq!(v["success"], true);
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "label clear");
     assert!(profile["id"].is_string());
     assert!(profile["label"].is_null() || profile["label"] == "");
     assert!(profile.get("default").is_none());
@@ -3313,9 +3307,7 @@ fn json_label_rename_returns_success_shape() {
     ]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "label rename");
-    assert_eq!(v["success"], true);
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "label rename");
     assert!(profile["id"].is_string());
     assert_eq!(profile["label"], "renamed");
     assert!(profile.get("default").is_none());
@@ -3331,9 +3323,7 @@ fn json_export_returns_success_shape() {
     let raw = env.run(&["export", "--output", out_path.to_str().unwrap(), "--json"]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "export");
-    assert_eq!(v["success"], true);
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "export");
     assert!(profile["count"].is_number(), "profile.count is number");
     assert!(profile["path"].is_string(), "profile.path is string");
     assert!(out_path.exists(), "export file should exist on disk");
@@ -3352,9 +3342,7 @@ fn json_import_returns_success_shape() {
     let raw = import_env.run(&["import", "--input", bundle.to_str().unwrap(), "--json"]);
     let v = parse_json(&raw);
 
-    assert_eq!(v["command"], "import");
-    assert_eq!(v["success"], true);
-    let profile = &v["profile"];
+    let profile = assert_json_success(&v, "import");
     assert!(profile["count"].is_number());
     assert!(profile["profiles"].is_array());
     let imported = profile["profiles"].as_array().expect("profiles array");
@@ -3362,8 +3350,7 @@ fn json_import_returns_success_shape() {
 }
 
 #[test]
-fn json_mutating_command_error_exits_nonzero_no_json_on_stdout() {
-    // delete a label that doesn't exist → error path; stdout must be empty / non-JSON.
+fn json_mutating_command_error_uses_failure_envelope_on_stderr() {
     let env = TestEnv::new();
     seed_alpha(&env);
     env.run(&["save", "--label", "alpha"]); // ensure there IS a profile store
@@ -3386,11 +3373,17 @@ fn json_mutating_command_error_exits_nonzero_no_json_on_stdout() {
         "expected non-zero exit for missing label"
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // stdout must NOT contain valid JSON (errors go to stderr)
+    assert!(stdout.trim().is_empty(), "stdout should be empty on error");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let value = parse_json(&stderr);
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["command"], "delete");
+    assert_eq!(value["success"], false);
+    assert!(value["data"].is_null());
     assert!(
-        serde_json::from_str::<serde_json::Value>(stdout.trim()).is_err()
-            || stdout.trim().is_empty(),
-        "stdout should be empty or non-JSON on error, got: {stdout:?}"
+        value["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("nonexistent"))
     );
 }
 
@@ -3441,7 +3434,7 @@ fn compat_v01_profiles_index_migrates_on_read() {
 
     // `list --json` must succeed and include the migrated profile.
     let out = env.run(&["list", "--json"]);
-    let v: serde_json::Value = parse_json(&out);
+    let v: serde_json::Value = parse_json_success(&out, "list");
     let profiles = v["profiles"].as_array().expect("profiles must be array");
     let ids: Vec<&str> = profiles.iter().filter_map(|p| p["id"].as_str()).collect();
     assert!(
@@ -3501,7 +3494,7 @@ fn compat_v02_profiles_index_loads_correctly() {
     .expect("write v0.2 profiles.json");
 
     let out = env.run(&["list", "--json"]);
-    let v: serde_json::Value = parse_json(&out);
+    let v: serde_json::Value = parse_json_success(&out, "list");
 
     let profiles = v["profiles"].as_array().expect("profiles must be array");
     let ids: Vec<&str> = profiles.iter().filter_map(|p| p["id"].as_str()).collect();

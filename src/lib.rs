@@ -5,9 +5,35 @@ use crate::cli::{Cli, Commands, command_with_examples};
 
 pub fn run_cli() {
     let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let json = args.iter().any(|arg| arg == "--json");
+    let command = json_command_name(&args);
     if let Err(message) = run_cli_with_args(args) {
-        eprintln!("{message}");
+        if json {
+            let payload = json_response::JsonEnvelope::failure(&command, message);
+            eprintln!(
+                "{}",
+                payload
+                    .to_pretty_string()
+                    .unwrap_or_else(|err| format!("JSON serialization failed: {err}"))
+            );
+        } else {
+            eprintln!("{message}");
+        }
         std::process::exit(1);
+    }
+}
+
+fn json_command_name(args: &[std::ffi::OsString]) -> String {
+    let positional: Vec<&str> = args
+        .iter()
+        .skip(1)
+        .filter_map(|arg| arg.to_str())
+        .filter(|arg| !arg.starts_with('-'))
+        .collect();
+    match positional.as_slice() {
+        ["label", subcommand, ..] => format!("label {subcommand}"),
+        [command, ..] => (*command).to_string(),
+        [] => "unknown".to_string(),
     }
 }
 
