@@ -1,71 +1,105 @@
-<h1 align="center">CodexSwitch CLI</h1>
+<div align="center">
 
-<p align="center">Ultra-fast, cross-platform profile switching for ChatGPT, Codex, and third-party providers.</p>
+# CodexSwitch CLI
 
-<p align="center">
-  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml/badge.svg?branch=main" alt="Tests" /></a>
-  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
-  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/docs.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs" /></a>
-  <a href="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml"><img src="https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml/badge.svg" alt="Security audit" /></a>
-</p>
+**Save once. Switch Codex accounts in one command.**
 
-<p align="center">
-  <a href="#install">Install</a> ·
-  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/usage.md">Usage</a> ·
-  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/verification.md">Verification</a> ·
-  <a href="https://github.com/syntaxskills/codexswitch-cli/blob/main/CHANGELOG.md">Changelog</a>
-</p>
+Fast, local-first profile switching for Codex, ChatGPT accounts, and custom providers.
+
+[![Tests](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/tests.yml)
+[![Docs](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/docs.yml)
+[![Security audit](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml/badge.svg)](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml)
+[![Release](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml/badge.svg)](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml)
+
+[Quick start](#quick-start) · [Install](#install) · [Commands](#commands) · [Documentation](#documentation)
+
+</div>
+CodexSwitch stores named snapshots of `~/.codex/auth.json` and, when requested,
+`~/.codex/config.toml`. It restores them atomically, so moving between work,
+personal, and provider-specific profiles does not require copying credentials
+by hand or repeatedly logging in.
+
+```console
+$ codexswitch-cli save --label work
+Saved profile [PRO] work@example.com (work)
+
+$ codexswitch-cli save --label personal
+Saved profile [PRO] personal@example.com (personal)
+
+$ codexswitch-cli list
+[PRO] personal@example.com (personal) <- active · Credentials
+[PRO] work@example.com (work) · Credentials
+
+$ codexswitch-cli load --label work
+Loaded profile [PRO] work@example.com (work)
+```
+
+## Highlights
+
+| | |
+| --- | --- |
+| **Local by default** | Credentials stay on your machine. No account data is uploaded by CodexSwitch. |
+| **Config-aware profiles** | Save credentials alone, or include provider and model settings from `config.toml`. |
+| **Usage at a glance** | Inspect the active account, one saved profile, or every profile with `status`. |
+| **Scriptable output** | Every command supports a versioned `--json` success and error envelope. |
+| **Safe storage** | Atomic writes, file locking, private permissions, diagnostics, and repair tooling. |
+| **Cross-platform** | Works on Linux, macOS, and Windows, including Intel and Apple Silicon builds. |
 
 ## Install
 
-Use npm or Bun if you want the easiest setup:
+Install the current GitHub version with Cargo:
+```bash
+cargo install --git https://github.com/syntaxskills/codexswitch-cli --locked
+```
 
+This requires Rust 1.94 or newer.
+
+<details>
+<summary>Prebuilt binary, npm, Bun, and crates.io options</summary>
+
+Install the latest prebuilt GitHub release:
+```bash
+curl -fsSL https://raw.githubusercontent.com/syntaxskills/codexswitch-cli/main/install.sh | bash
+```
+
+Install the published npm package:
 ```bash
 npm install -g @syntaxskills/codexswitch-cli
 # or
 bun install -g @syntaxskills/codexswitch-cli
 ```
 
-Then verify the command is available:
+Install the published crate:
+
+```bash
+cargo install codexswitch-cli --locked
+```
+
+</details>
+
+Verify the installation:
 
 ```bash
 codexswitch-cli --version
-codexswitch-cli list
 ```
 
-### Other Install Options
+## Quick Start
 
-Install the latest GitHub release directly:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/syntaxskills/codexswitch-cli/main/install.sh | bash
-```
-
-Build from source:
-
-```bash
-cargo install --git https://github.com/syntaxskills/codexswitch-cli --locked
-```
-
-Requires Rust 1.94 or newer.
-
-## Setup
-
-1. Log in with your first Codex account:
+Log in to the first account and save it:
 
 ```bash
 codex login
 codexswitch-cli save --label work
 ```
 
-2. Log in with another Codex account and save it:
+Log in to another account and save that profile:
 
 ```bash
 codex login
 codexswitch-cli save --label personal
 ```
 
-3. Switch when needed:
+List and switch profiles:
 
 ```bash
 codexswitch-cli list
@@ -73,26 +107,24 @@ codexswitch-cli load --label work
 codexswitch-cli load --label personal
 ```
 
-Use `--include-config` when a profile also needs `~/.codex/config.toml`, for
-example custom providers:
+Run `load` without a selector to choose interactively.
+
+### Provider-Specific Profiles
+
+Use `--include-config` when an account also depends on settings in
+`~/.codex/config.toml`, such as a custom provider:
 
 ```bash
 codexswitch-cli save --label third-party --include-config
 ```
 
-Then restore the official Codex provider configuration and re-save each official
-profile with `--include-config`:
+<details>
+<summary>Manage only selected config keys</summary>
 
-```bash
-codexswitch-cli save --label work --include-config
-codexswitch-cli save --label personal --include-config
-```
-
-By default, CodexSwitch backs up and replaces the entire `config.toml`. This is
-the simplest behavior and ensures a profile restores exactly what was saved.
-
-To save and replace only specific top-level fields while preserving everything
-else in the active config, create `~/.codex/codexswitch/config.toml`:
+By default, a config-aware profile snapshots and restores the entire
+`config.toml`. To preserve unrelated settings, create
+`~/.codex/codexswitch/config.toml` and list the top-level keys CodexSwitch
+should manage:
 
 ```toml
 managed_config_keys = [
@@ -102,46 +134,65 @@ managed_config_keys = [
 ]
 ```
 
-Loading an auth-only profile does not change any active config fields. Saving
-provider-specific and official profiles with `--include-config` ensures that
-switching profiles also switches providers correctly.
+</details>
 
-## Common Commands
+## Commands
 
-| Command | What it does |
+| Command | Purpose |
 | --- | --- |
-| `codexswitch-cli save --label work` | Save the current `~/.codex/auth.json` as a profile. |
-| `codexswitch-cli load --label work` | Restore a saved profile. |
-| `codexswitch-cli list` | Show saved profiles. |
-| `codexswitch-cli status --all` | Show active and saved profile usage. |
-| `codexswitch-cli export --output profiles.json` | Export profiles for backup or transfer. |
-| `codexswitch-cli import --input profiles.json` | Import profiles from an export bundle. |
-| `codexswitch-cli doctor --fix` | Check and repair local profile storage. |
+| `save --label <name>` | Save the active credentials as a named profile. |
+| `load --label <name>` | Restore a profile; omit the selector for an interactive picker. |
+| `list` | Show saved profiles and identify the active account. |
+| `status --all` | Show usage windows for the active and saved profiles. |
+| `label set`, `clear`, `rename` | Manage profile labels without re-saving credentials. |
+| `export` / `import` | Back up or transfer profile bundles. |
+| `doctor --fix` | Diagnose and repair local profile storage metadata. |
+| `delete --label <name>` | Remove a saved profile with confirmation. |
 
-Run `codexswitch-cli help <command>` for command-specific options.
+Run `codexswitch-cli help <command>` for every option and example.
 
-## Storage
+## Automation
 
-Profiles are stored locally under:
+Use `--json` for scripts and integrations:
+
+```bash
+codexswitch-cli list --json
+codexswitch-cli status --all --json
+```
+
+Successful responses go to stdout. Failures use the same versioned envelope on
+stderr and return a non-zero exit status. See the
+[JSON output contract](docs/json-output.md).
+
+## Storage and Security
+
+Profiles are stored under:
 
 ```text
 ~/.codex/codexswitch/profiles/
 ```
 
-Auth files and export bundles contain secrets. Keep them private.
+> [!IMPORTANT]
+> Saved auth files and export bundles contain secrets. Do not commit, publish,
+> or share them. CodexSwitch keeps profile operations local, but `status` and
+> token refreshes still contact the configured provider APIs.
 
-## Docs
+Release binaries include SHA-256 checksums, manifests, and GitHub artifact
+attestations. See [release verification](docs/verification.md).
 
-- [Full usage guide](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/usage.md)
-- [JSON output contract](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/json-output.md)
-- [Release verification](https://github.com/syntaxskills/codexswitch-cli/blob/main/docs/verification.md)
-- [Contributing](https://github.com/syntaxskills/codexswitch-cli/blob/main/CONTRIBUTING.md)
+## Documentation
 
-## About SyntaxSkills
+- [Usage and command reference](docs/usage.md)
+- [JSON output contract](docs/json-output.md)
+- [Release verification](docs/verification.md)
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
 
-SyntaxSkills hosts this repository to keep maintenance continuous and community-owned. The goal is not profit; it is to keep the tool maintained beyond any single person. Contributors and maintainers are welcome to join.
+## Project
 
-## Acknowledgements
+SyntaxSkills maintains CodexSwitch as a community-owned open-source project.
+Focused bug fixes, documentation improvements, portability work, and CLI
+usability improvements are welcome.
 
 CodexSwitch CLI is inspired by
 [`codex-profiles`](https://github.com/midhunmonachan/codex-profiles) and

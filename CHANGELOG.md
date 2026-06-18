@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aligned usage rows, and window durations in JSON output
 - removed duplicate config parsers, an unnecessary direct dependency, and
   redundant tests using the Ponytail simplification rules
+- redesigned the README around a concise product overview, realistic terminal
+  workflow, Cargo-first installation, feature summary, and clearer safety notes
 
 ## [2.0.0] - 2026-06-18
 
