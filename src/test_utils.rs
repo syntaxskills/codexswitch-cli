@@ -101,12 +101,42 @@ pub(crate) fn spawn_server(response: String) -> String {
     let addr = listener.local_addr().unwrap();
     thread::spawn(move || {
         if let Ok((mut stream, _)) = listener.accept() {
-            let mut buf = [0u8; 4096];
-            let _ = stream.read(&mut buf);
+            read_http_request(&mut stream);
             let _ = stream.write_all(response.as_bytes());
         }
     });
     format!("http://{}", addr)
+}
+
+fn read_http_request(stream: &mut impl Read) {
+    let mut request = Vec::new();
+    let mut buf = [0u8; 1024];
+    loop {
+        let Ok(size) = stream.read(&mut buf) else {
+            return;
+        };
+        if size == 0 {
+            return;
+        }
+        request.extend_from_slice(&buf[..size]);
+
+        let Some(header_end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") else {
+            continue;
+        };
+        let headers = String::from_utf8_lossy(&request[..header_end]);
+        let content_length = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+            .unwrap_or(0);
+        if request.len() >= header_end + 4 + content_length {
+            return;
+        }
+    }
 }
 
 pub(crate) fn build_id_token(email: &str, plan: &str) -> String {
