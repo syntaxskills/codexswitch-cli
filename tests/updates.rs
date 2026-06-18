@@ -1,4 +1,4 @@
-use codex_profiles::{
+use codexswitch_cli::{
     InstallSource, detect_install_source_inner, extract_version_from_cask,
     extract_version_from_latest_tag, is_newer,
 };

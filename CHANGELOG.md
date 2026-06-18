@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-18
+
+### Added
+
+- published Rust library documentation under the `codexswitch_cli` crate name
+
 ### Changed
 
 - isolated CodexSwitch profile storage under `~/.codex/codexswitch/profiles/`
@@ -14,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publishing credentials after the one-time initial package bootstrap
 - stopped tag-triggered releases from committing generated checksums to `main`;
   checksums remain attached to each GitHub Release
+- removed environment variable aliases inherited from the predecessor project
+  from the CLI, npm wrapper, and installer
+
+### Removed
+
+- removed obsolete repository checksum copies for pre-CodexSwitch artifacts;
+  historical checksums remain attached to their GitHub Releases
 
 ## [0.3.2] - 2026-06-11
 

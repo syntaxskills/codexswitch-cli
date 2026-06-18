@@ -72,18 +72,13 @@ function detectPackageManager(packageDirectory) {
 
 const env = { ...process.env };
 const packageManager = detectPackageManager(packageDir);
-const packageManagerEnvVars =
+const packageManagerEnvVar =
   packageManager === "bun"
-    ? ["CODEXSWITCH_CLI_MANAGED_BY_BUN", "CODEX_PROFILES_MANAGED_BY_BUN"]
-    : ["CODEXSWITCH_CLI_MANAGED_BY_NPM", "CODEX_PROFILES_MANAGED_BY_NPM"];
-for (const name of packageManagerEnvVars) {
-  env[name] = "1";
-}
+    ? "CODEXSWITCH_CLI_MANAGED_BY_BUN"
+    : "CODEXSWITCH_CLI_MANAGED_BY_NPM";
+env[packageManagerEnvVar] = "1";
 if (!env.CODEXSWITCH_CLI_COMMAND && invokedName) {
   env.CODEXSWITCH_CLI_COMMAND = invokedName;
-}
-if (!env.CODEX_PROFILES_COMMAND && invokedName) {
-  env.CODEX_PROFILES_COMMAND = invokedName;
 }
 
 const child = spawn(binaryPath, process.argv.slice(2), {

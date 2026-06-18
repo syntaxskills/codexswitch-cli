@@ -1060,10 +1060,10 @@ mod tests {
     fn set_env_clears_value() {
         let _guard = ENV_MUTEX.lock().unwrap();
         {
-            let _env = set_env_guard("CODEX_PROFILES_TEST_ENV", Some("value"));
+            let _env = set_env_guard("CODEXSWITCH_CLI_TEST_ENV", Some("value"));
         }
         {
-            let _env = set_env_guard("CODEX_PROFILES_TEST_ENV", None);
+            let _env = set_env_guard("CODEXSWITCH_CLI_TEST_ENV", None);
         }
     }
 

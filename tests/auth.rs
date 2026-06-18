@@ -1,6 +1,6 @@
 mod common;
 
-use codex_profiles::{AuthFile, Tokens, extract_email_and_plan};
+use codexswitch_cli::{AuthFile, Tokens, extract_email_and_plan};
 use common::build_id_token;
 
 #[test]

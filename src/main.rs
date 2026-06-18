@@ -1,3 +1,3 @@
 fn main() {
-    codex_profiles::run_cli();
+    codexswitch_cli::run_cli();
 }

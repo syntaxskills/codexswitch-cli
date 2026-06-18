@@ -61,9 +61,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let is_doctor = matches!(&cli.command, Commands::Doctor { .. });
     if !is_doctor {
         ensure_paths(&paths)?;
-        let check_for_update_on_startup = std::env::var_os("CODEXSWITCH_CLI_SKIP_UPDATE")
-            .or_else(|| std::env::var_os("CODEX_PROFILES_SKIP_UPDATE"))
-            .is_none();
+        let check_for_update_on_startup = std::env::var_os("CODEXSWITCH_CLI_SKIP_UPDATE").is_none();
         let update_config = UpdateConfig {
             codex_home: paths.codex.clone(),
             check_for_update_on_startup,

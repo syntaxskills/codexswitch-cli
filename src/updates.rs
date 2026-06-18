@@ -23,9 +23,9 @@ const LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/syntaxskills/codexswitch-cli/releases/latest";
 const RELEASE_NOTES_URL: &str = "https://github.com/syntaxskills/codexswitch-cli/releases/latest";
 #[cfg(test)]
-const HOMEBREW_CASK_URL_OVERRIDE_ENV_VAR: &str = "CODEX_PROFILES_HOMEBREW_CASK_URL";
+const HOMEBREW_CASK_URL_OVERRIDE_ENV_VAR: &str = "CODEXSWITCH_CLI_HOMEBREW_CASK_URL";
 #[cfg(test)]
-const LATEST_RELEASE_URL_OVERRIDE_ENV_VAR: &str = "CODEX_PROFILES_LATEST_RELEASE_URL";
+const LATEST_RELEASE_URL_OVERRIDE_ENV_VAR: &str = "CODEXSWITCH_CLI_LATEST_RELEASE_URL";
 
 /// Update action the CLI should perform after the prompt exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,12 +70,8 @@ impl UpdateAction {
 
 pub fn detect_install_source() -> InstallSource {
     let exe = std::env::current_exe().unwrap_or_default();
-    let managed_by_npm = std::env::var_os("CODEXSWITCH_CLI_MANAGED_BY_NPM")
-        .or_else(|| std::env::var_os("CODEX_PROFILES_MANAGED_BY_NPM"))
-        .is_some();
-    let managed_by_bun = std::env::var_os("CODEXSWITCH_CLI_MANAGED_BY_BUN")
-        .or_else(|| std::env::var_os("CODEX_PROFILES_MANAGED_BY_BUN"))
-        .is_some();
+    let managed_by_npm = std::env::var_os("CODEXSWITCH_CLI_MANAGED_BY_NPM").is_some();
+    let managed_by_bun = std::env::var_os("CODEXSWITCH_CLI_MANAGED_BY_BUN").is_some();
     detect_install_source_inner(
         cfg!(target_os = "macos"),
         &exe,
