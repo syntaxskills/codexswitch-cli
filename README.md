@@ -11,77 +11,52 @@ Fast, local-first profile switching for Codex, ChatGPT accounts, and custom prov
 [![Security audit](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml/badge.svg)](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/security-audit.yml)
 [![Release](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml/badge.svg)](https://github.com/syntaxskills/codexswitch-cli/actions/workflows/release.yml)
 
-[Quick start](#quick-start) · [Install](#install) · [Commands](#commands) · [Documentation](#documentation)
+[Install](#install) · [Quick start](#quick-start) · [Commands](#commands) · [Documentation](#documentation)
 
 </div>
 
-CodexSwitch stores named snapshots of `~/.codex/auth.json` and, when requested,
-`~/.codex/config.toml`. It restores them atomically, so moving between work,
-personal, and provider-specific profiles does not require copying credentials
-by hand or repeatedly logging in.
-
-```console
-$ codexswitch-cli save --label work
-Saved profile [PRO] work@example.com (work)
-$ codexswitch-cli save --label personal
-Saved profile [PRO] personal@example.com (personal)
-
-$ codexswitch-cli list
-[PRO] personal@example.com (personal) <- active · Credentials
-[PRO] work@example.com (work) · Credentials
-
-$ codexswitch-cli load --label work
-Loaded profile [PRO] work@example.com (work)
-```
-
-## Highlights
-
-| | |
-| --- | --- |
-| **Local by default** | Credentials stay on your machine. No account data is uploaded by CodexSwitch. |
-| **Config-aware profiles** | Save credentials alone, or include provider and model settings from `config.toml`. |
-| **Usage at a glance** | Inspect the active account, one saved profile, or every profile with `status`. |
-| **Scriptable output** | Every command supports a versioned `--json` success and error envelope. |
-| **Safe storage** | Atomic writes, file locking, private permissions, diagnostics, and repair tooling. |
-| **Cross-platform** | Works on Linux, macOS, and Windows, including Intel and Apple Silicon builds. |
-
 ## Install
 
-Install the current GitHub version with Cargo:
-```bash
-cargo install --git https://github.com/syntaxskills/codexswitch-cli --locked
+### Ask Your AI Agent
+
+Copy this prompt into Codex, Claude Code, Cursor, or another coding agent:
+
+```text
+Install CodexSwitch CLI from https://github.com/syntaxskills/codexswitch-cli.
+Prefer npm, verify it with `codexswitch-cli --version`, and tell me exactly
+what changed. If npm is unavailable, install from the official Git repository
+with Cargo.
 ```
 
-This requires Rust 1.94 or newer.
+### npm or Bun
 
-<details>
-<summary>Prebuilt binary, npm, Bun, and crates.io options</summary>
-
-Install the latest prebuilt GitHub release:
-```bash
-curl -fsSL https://raw.githubusercontent.com/syntaxskills/codexswitch-cli/main/install.sh | bash
-```
-
-Install the published npm package:
 ```bash
 npm install -g @syntaxskills/codexswitch-cli
 # or
 bun install -g @syntaxskills/codexswitch-cli
 ```
 
-Install the published crate:
+### Cargo
+
+Install the current GitHub version:
 
 ```bash
-cargo install codexswitch-cli --locked
+cargo install --git https://github.com/syntaxskills/codexswitch-cli --locked
 ```
+
+Requires Rust 1.94 or newer.
+
+<details>
+<summary>Prebuilt binary and crates.io</summary>
+
+Install the latest prebuilt GitHub release:
+```bash
+curl -fsSL https://raw.githubusercontent.com/syntaxskills/codexswitch-cli/main/install.sh | bash
+```
+
+Or install the published crate with `cargo install codexswitch-cli --locked`.
 
 </details>
-
-Verify the installation:
-
-```bash
-codexswitch-cli --version
-```
 
 ## Quick Start
 
@@ -135,6 +110,19 @@ managed_config_keys = [
 ```
 
 </details>
+
+## Why CodexSwitch
+
+CodexSwitch saves named snapshots of Codex credentials and optional provider
+settings, then restores them atomically.
+
+| | |
+| --- | --- |
+| **Local-first** | Credentials stay on your machine; profile operations do not upload them. |
+| **Config-aware** | Switch custom providers and models together with account credentials. |
+| **Observable** | View account usage windows with `status`, including all saved profiles. |
+| **Reliable** | Atomic writes, file locking, private permissions, diagnostics, and JSON output. |
+| **Cross-platform** | Linux, macOS, and Windows, including Intel and Apple Silicon builds. |
 
 ## Commands
 
