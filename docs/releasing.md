@@ -75,4 +75,21 @@ Registry publication is idempotent: versions already present on crates.io are
 detected and skipped, while unpublished versions must authenticate and publish
 successfully before the workflow can complete.
 
+For example, if the v2.0.0 release assets or checksum metadata are absent, first
+confirm the npm and crates.io trusted publishers are configured, then recover
+the existing tag:
+
+```bash
+gh workflow run release.yml \
+  --repo syntaxskills/codexswitch-cli \
+  -f tag=v2.0.0
+```
+
+Do not add a repository checksum file or invent hashes while the artifacts are
+missing. Once the workflow has uploaded the assets, verify the complete release:
+
+```bash
+scripts/verify-artifacts.sh --release v2.0.0
+```
+
 Never move a published tag.

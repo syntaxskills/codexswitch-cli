@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   redundant tests using the Ponytail simplification rules
 - redesigned the README around a concise product overview, realistic terminal
   workflow, Cargo-first installation, feature summary, and clearer safety notes
+- restored fail-closed GitHub Release checksum verification, including an
+  explicit recovery path for missing v2.0.0 release assets
 
 ## [2.0.0] - 2026-06-18
 
