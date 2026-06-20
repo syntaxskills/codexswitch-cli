@@ -7,6 +7,30 @@ configuration or failed registry upload fails the workflow.
 Generated checksums are published as GitHub Release assets. The tag-triggered
 workflow never commits or pushes generated files back to `main`.
 
+## Version Consistency Check
+
+After changing a release version and before creating or pushing its tag, run:
+
+```sh
+npm run check:release-version
+```
+
+This validates that `Cargo.toml`, the `codexswitch-cli` entry in `Cargo.lock`,
+`package.json`, and all npm platform packages in `optionalDependencies` use the
+same version.
+
+To also verify the version intended for a release, pass either the version or
+tag:
+
+```sh
+npm run check:release-version -- 2.0.0
+npm run check:release-version -- v2.0.0
+```
+
+The command exits nonzero and identifies every mismatch. Maintainers should
+resolve all reported differences before running `scripts/release-tag` or
+`scripts/release-prep.sh`.
+
 ## crates.io Initial Publish
 
 crates.io trusted publishing can only be configured after the crate exists.

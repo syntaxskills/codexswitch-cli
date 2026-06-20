@@ -10,6 +10,9 @@
   "engines": {
     "node": ">=20"
   },
+  "scripts": {
+    "check:release-version": "node scripts/check-release-version.mjs"
+  },
   "optionalDependencies": {
     "@syntaxskills/codexswitch-cli-darwin-arm64": "2.0.0",
     "@syntaxskills/codexswitch-cli-darwin-x64": "2.0.0",
