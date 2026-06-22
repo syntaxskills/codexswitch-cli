@@ -109,7 +109,7 @@ jobs:
         with:
           tool: cargo-nextest@0.9.129
       - name: Cache cargo bin
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         continue-on-error: true
         with:
           path: ~/.cargo/bin
@@ -159,7 +159,7 @@ jobs:
           bash scripts/check-toolchain.sh
           rustup target add "${{ matrix.target }}"
       - name: Cache cargo bin
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         continue-on-error: true
         with:
           path: ~/.cargo/bin
@@ -203,7 +203,7 @@ jobs:
           node-version: 24.14.0
           registry-url: https://registry.npmjs.org
       - name: Cache cargo bin
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         continue-on-error: true
         with:
           path: ~/.cargo/bin
