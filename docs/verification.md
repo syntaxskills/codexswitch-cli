@@ -1,6 +1,6 @@
 # Release Verification
 
-Each GitHub release includes:
+A complete GitHub release includes:
 
 - `SHA256SUMS`
 - `release-manifest.json`
@@ -9,34 +9,58 @@ Each GitHub release includes:
 
 ## Verify GitHub release assets
 
-Download the release asset you want to inspect together with `SHA256SUMS` and
+The project verifier downloads the complete asset set and checks every file
+listed in `SHA256SUMS` against both its actual content and
 `release-manifest.json`:
 
 ```bash
-TAG="vX.Y.Z"
-gh release download "$TAG" \
-  --repo syntaxskills/codexswitch-cli \
-  --pattern 'SHA256SUMS' \
-  --pattern 'release-manifest.json' \
-  --pattern 'codexswitch-cli-x86_64-unknown-linux-gnu.tar.gz'
+scripts/verify-artifacts.sh --release vX.Y.Z
 ```
 
 Replace `vX.Y.Z` with the release tag you want to verify.
 
-Then verify the checksums:
+To verify assets that are already downloaded into one directory:
 
 ```bash
-shasum -a 256 -c SHA256SUMS
+scripts/verify-artifacts.sh --release-dir vX.Y.Z /path/to/release-assets
 ```
 
-On systems with GNU coreutils:
+For a manual verification, download every release asset into a clean directory.
+Downloading only one binary with the complete `SHA256SUMS` file makes standard
+checksum tools report the other release assets as missing.
 
 ```bash
+TAG="vX.Y.Z"
+mkdir -p "dist/releases/$TAG"
+gh release download "$TAG" \
+  --repo syntaxskills/codexswitch-cli \
+  --dir "dist/releases/$TAG"
+cd "dist/releases/$TAG"
 sha256sum -c SHA256SUMS
 ```
 
+On macOS, use `shasum -a 256 -c SHA256SUMS`.
+
 `release-manifest.json` records the release version, tag, commit SHA, tool
 versions, and the same per-asset hashes from `SHA256SUMS`.
+
+## v2.0.0 and missing release assets
+
+Checksums generated for v2.0.0 belong on the `v2.0.0` GitHub Release. There is
+intentionally no `checksums/v2.0.0.txt` repository file: repository checksum
+copies are retained only for older releases.
+
+Verify v2.0.0 with:
+
+```bash
+scripts/verify-artifacts.sh --release v2.0.0
+```
+
+If the release, `SHA256SUMS`, `release-manifest.json`, or any checksummed
+artifact is absent, verification is not possible. Do not create checksum values
+for missing artifacts. The verifier fails with the exact maintainer recovery
+command; after the existing immutable tag is recovered by the release workflow,
+run the same verification command again.
 
 ## Verify GitHub attestations
 
