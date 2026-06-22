@@ -221,6 +221,7 @@ jobs:
           version="${{ needs.tag-check.outputs.version }}"
           scripts/release-artifacts.sh "${version}" dist/artifacts dist
           scripts/verify-artifacts.sh "${version}" dist
+          scripts/smoke-test-npm.sh dist/npm-packages
 
       - name: Generate artifact attestations
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0

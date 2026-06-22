@@ -92,6 +92,23 @@ The release workflow publishes platform packages before the main package and
 then verifies all six npm versions, crates.io, and the GitHub Release before
 succeeding.
 
+## npm Package Smoke Test
+
+Run the npm package smoke test after generating release artifacts and before
+publishing them:
+
+```sh
+scripts/release-artifacts.sh "$VERSION" dist/artifacts dist
+make smoke-test-npm
+```
+
+The test installs the main package and the current platform package from
+`dist/npm-packages` into a temporary project, then runs
+`codexswitch-cli --version` and `codexswitch-cli --help`. It uses temporary npm
+configuration, cache, and prefix directories and does not publish packages or
+install anything globally. The release workflow runs this check automatically
+before artifact attestation and publication.
+
 ## Recovery
 
 The release workflow accepts an existing tag through `workflow_dispatch`.
