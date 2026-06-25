@@ -27,13 +27,20 @@ jobs:
       - name: Install Rust from rust-toolchain.toml
         run: bash scripts/check-toolchain.sh
 
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24.14.0
+
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         continue-on-error: true
         with:
           shared-key: ${{ runner.os }}-lint-${{ hashFiles('rust-toolchain.toml') }}
 
       - name: Run lint checks
-        run: scripts/check.sh --lint-only
+        run: npm run lint
+
+      - name: Run npm wrapper smoke test
+        run: npm run test:npm-wrapper
 
   tests:
     name: tests-${{ matrix.os }}
@@ -51,6 +58,10 @@ jobs:
 
       - name: Install Rust from rust-toolchain.toml
         run: bash scripts/check-toolchain.sh
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24.14.0
 
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         continue-on-error: true
@@ -70,4 +81,4 @@ jobs:
           tool: cargo-nextest@0.9.129
 
       - name: Run checks
-        run: scripts/check.sh --tests-only
+        run: npm test

@@ -1,4 +1,4 @@
-.PHONY: coverage fmt clippy test check precommit hooks release-tag release-prep env-check clean-artifacts verify-artifacts smoke-test-npm print-release-notes
+.PHONY: coverage fmt clippy test check precommit hooks release-tag release-prep env-check clean-artifacts verify-artifacts smoke-test-npm smoke-test-npm-wrapper print-release-notes
 
 coverage:
 	cargo llvm-cov --workspace --all-features --fail-under-lines 90 --ignore-filename-regex "tests/|target/"
@@ -68,6 +68,9 @@ verify-artifacts:
 
 smoke-test-npm:
 	@./scripts/smoke-test-npm.sh $(ARGS)
+
+smoke-test-npm-wrapper:
+	@./scripts/smoke-test-npm-wrapper.sh $(ARGS)
 
 print-release-notes:
 	@./scripts/print-release-notes.sh $(ARGS)

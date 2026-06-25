@@ -955,6 +955,7 @@ mod tests {
         });
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn write_atomic_permissions_error() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -989,6 +990,7 @@ mod tests {
         });
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn write_atomic_rename_error() {
         let dir = tempfile::tempdir().expect("tempdir");

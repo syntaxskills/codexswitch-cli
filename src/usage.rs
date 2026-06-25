@@ -1155,6 +1155,7 @@ mod tests {
         LOCK_FAILPOINT.with(|failpoint| failpoint.set(0));
     }
 
+    #[cfg(unix)]
     #[test]
     fn lock_usage_open_error() {
         let _guard = LOCK_TEST_MUTEX.lock().unwrap();

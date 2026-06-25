@@ -11,6 +11,10 @@
     "node": ">=20"
   },
   "scripts": {
+    "lint": "bash scripts/check.sh --lint-only",
+    "test": "bash scripts/check.sh --tests-only",
+    "check": "bash scripts/check.sh",
+    "test:npm-wrapper": "bash scripts/smoke-test-npm-wrapper.sh",
     "check:release-version": "node scripts/check-release-version.mjs"
   },
   "optionalDependencies": {

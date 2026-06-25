@@ -109,6 +109,32 @@ configuration, cache, and prefix directories and does not publish packages or
 install anything globally. The release workflow runs this check automatically
 before artifact attestation and publication.
 
+For PR and local packaging changes, run the lightweight wrapper smoke test:
+
+```sh
+npm run test:npm-wrapper
+```
+
+This packs the npm wrapper, installs it with a temporary platform package, and
+confirms that the wrapper launches the platform binary with forwarded
+arguments and npm environment markers.
+
+## Artifact Verification
+
+Use `scripts/verify-artifacts.sh` as the reusable verification entry point for
+both generated release output and published GitHub Release assets:
+
+```sh
+scripts/verify-artifacts.sh "$VERSION" dist
+scripts/verify-artifacts.sh --release "v$VERSION"
+scripts/verify-artifacts.sh --release-dir "v$VERSION" /path/to/release-assets
+```
+
+The canonical verifier behavior and manual fallback commands are documented in
+[`docs/verification.md`](verification.md). The release workflow runs the
+generated-output verification automatically immediately after
+`scripts/release-artifacts.sh`.
+
 ## Recovery
 
 The release workflow accepts an existing tag through `workflow_dispatch`.
