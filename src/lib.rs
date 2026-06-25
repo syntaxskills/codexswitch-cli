@@ -195,6 +195,7 @@ mod tests {
     use crate::test_utils::{make_paths, set_env_guard};
     use std::ffi::OsString;
     use std::fs;
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
     #[test]
@@ -225,14 +226,26 @@ mod tests {
         assert!(err.contains("error"));
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn run_update_action_paths() {
         let dir = tempfile::tempdir().expect("tempdir");
+        #[cfg(windows)]
+        let bin = dir.path().join("npm.cmd");
+        #[cfg(not(windows))]
         let bin = dir.path().join("npm");
+
+        #[cfg(windows)]
+        fs::write(&bin, "@echo off\r\nexit /b 0\r\n").unwrap();
+        #[cfg(not(windows))]
         fs::write(&bin, "#!/bin/sh\nexit 0\n").unwrap();
-        let mut perms = fs::metadata(&bin).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&bin, perms).unwrap();
+
+        #[cfg(unix)]
+        {
+            let mut perms = fs::metadata(&bin).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&bin, perms).unwrap();
+        }
         let path = dir.path().to_string_lossy().into_owned();
         {
             let _env = set_env_guard("PATH", Some(&path));

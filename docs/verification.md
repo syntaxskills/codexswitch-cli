@@ -19,15 +19,22 @@ scripts/verify-artifacts.sh --release vX.Y.Z
 
 Replace `vX.Y.Z` with the release tag you want to verify.
 
-To verify assets that are already downloaded into one directory:
+The same verifier is reusable in three release stages:
 
 ```bash
+# Locally generated release output, before publishing.
+scripts/verify-artifacts.sh X.Y.Z dist
+
+# Published release assets, downloaded by the verifier.
+scripts/verify-artifacts.sh --release vX.Y.Z
+
+# Published or staged assets that you have already downloaded.
 scripts/verify-artifacts.sh --release-dir vX.Y.Z /path/to/release-assets
 ```
 
-For a manual verification, download every release asset into a clean directory.
-Downloading only one binary with the complete `SHA256SUMS` file makes standard
-checksum tools report the other release assets as missing.
+For `--release-dir` or a manual verification, download every release asset into
+a clean directory. Downloading only one binary with the complete `SHA256SUMS`
+file makes standard checksum tools report the other release assets as missing.
 
 ```bash
 TAG="vX.Y.Z"
