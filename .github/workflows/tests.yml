@@ -36,6 +36,9 @@ jobs:
         with:
           shared-key: ${{ runner.os }}-lint-${{ hashFiles('rust-toolchain.toml') }}
 
+      - name: Check release version metadata
+        run: npm run check:release-version
+
       - name: Run lint checks
         run: npm run lint
 
