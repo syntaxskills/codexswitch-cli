@@ -51,6 +51,21 @@ import sys
 version, checksums_path, manifest_path, label, *artifact_roots = sys.argv[1:]
 artifact_roots = [pathlib.Path(path).resolve() for path in artifact_roots]
 
+def artifact_basename(value, context):
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"{context} must be a non-empty string")
+    if (
+        pathlib.PurePosixPath(value).name != value
+        or pathlib.PureWindowsPath(value).name != value
+    ):
+        raise SystemExit(f"Unsafe {context}: {value}")
+    return value
+
+def require_non_empty_string(value, context):
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"{context} must be a non-empty string")
+    return value
+
 expected = {}
 with open(checksums_path, "r", encoding="utf-8") as fh:
     for line_number, line in enumerate(fh, 1):
@@ -65,10 +80,7 @@ with open(checksums_path, "r", encoding="utf-8") as fh:
             )
         if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
             raise SystemExit(f"Invalid SHA-256 on checksum line {line_number}")
-        if pathlib.PurePath(artifact).name != artifact:
-            raise SystemExit(
-                f"Unsafe checksum path on line {line_number}: {artifact}"
-            )
+        artifact = artifact_basename(artifact, f"checksum path on line {line_number}")
         if artifact in expected:
             raise SystemExit(f"Duplicate checksum entry: {artifact}")
         expected[artifact] = sha256.lower()
@@ -87,21 +99,40 @@ if manifest.get("tag") != f"v{version}":
     raise SystemExit(f"Manifest tag mismatch: {manifest.get('tag')} != v{version}")
 
 repository = manifest.get("repository")
-if not isinstance(repository, dict) or not repository.get("slug") or not repository.get("url"):
+if not isinstance(repository, dict):
+    raise SystemExit("Manifest repository field must include slug and url")
+require_non_empty_string(repository.get("slug"), "Manifest repository.slug field")
+require_non_empty_string(repository.get("url"), "Manifest repository.url field")
+if not (
+    isinstance(repository.get("slug"), str)
+    and isinstance(repository.get("url"), str)
+):
     raise SystemExit("Manifest repository field must include slug and url")
 if "commit" not in manifest:
     raise SystemExit("Manifest commit field is missing")
+commit = manifest.get("commit")
+if commit is not None and not isinstance(commit, str):
+    raise SystemExit("Manifest commit field must be a string or null")
 
 tools = manifest.get("tools")
 if not isinstance(tools, dict) or not tools:
     raise SystemExit("Manifest tools field must be a non-empty object")
+for key, value in tools.items():
+    require_non_empty_string(key, "Manifest tools key")
+    require_non_empty_string(value, f"Manifest tools.{key} field")
 
 provenance = manifest.get("provenance")
 if not isinstance(provenance, dict):
     raise SystemExit("Manifest provenance field must be an object")
-for key in ("github_release", "verification_guide", "github_attestations", "npm_provenance"):
+for key in ("github_release", "verification_guide"):
     if key not in provenance:
         raise SystemExit(f"Manifest provenance field is missing {key}")
+    require_non_empty_string(provenance.get(key), f"Manifest provenance.{key} field")
+for key in ("github_attestations", "npm_provenance"):
+    if key not in provenance:
+        raise SystemExit(f"Manifest provenance field is missing {key}")
+    if not isinstance(provenance.get(key), bool):
+        raise SystemExit(f"Manifest provenance.{key} field must be a boolean")
 
 artifacts = manifest.get("artifacts")
 if not isinstance(artifacts, list):
@@ -115,6 +146,9 @@ for artifact in artifacts:
     sha256 = artifact.get("sha256")
     if not path or not sha256:
         raise SystemExit("Manifest artifact entries must include path and sha256")
+    path = artifact_basename(path, "manifest artifact path")
+    if not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+        raise SystemExit(f"Invalid manifest SHA-256 for artifact: {path}")
     if path in observed:
         raise SystemExit(f"Duplicate manifest artifact entry: {path}")
     observed[path] = sha256.lower()

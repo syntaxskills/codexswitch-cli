@@ -74,6 +74,8 @@ if [[ "${run_tests}" -eq 1 ]]; then
   else
     cargo test --tests --locked
   fi
+  node --test tests/npm-wrapper.test.mjs
+  bash tests/verify-artifacts-fixtures.sh
 fi
 if [[ "${run_audit}" -eq 1 ]]; then
   cargo audit
