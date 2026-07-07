@@ -112,15 +112,29 @@ await import(${JSON.stringify(wrapperUrl)});
 test("uses the Windows .exe binary path when constructing the child process", (t) => {
   const packageName = "@syntaxskills/codexswitch-cli-win32-x64";
   const packageJsonPath = writePlatformPackage(t, packageName, {
-    "bin/codexswitch-cli.exe": `#!/usr/bin/env bash
-printf 'windows exe fixture\\n'
-printf 'args=%s\\n' "$*"
-printf 'managed_by_npm=%s\\n' "\${CODEXSWITCH_CLI_MANAGED_BY_NPM:-}"
-printf 'command=%s\\n' "\${CODEXSWITCH_CLI_COMMAND:-}"
-`,
+    "bin/codexswitch-cli.exe": "native fixture placeholder",
   });
   const result = runInline(`
 ${resolverPatch(packageName, packageJsonPath)}
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import { EventEmitter } from "node:events";
+
+childProcess.spawn = function(binaryPath, args, options) {
+  console.log(JSON.stringify({
+    binaryPath,
+    args,
+    managedByNpm: options.env.CODEXSWITCH_CLI_MANAGED_BY_NPM,
+    command: options.env.CODEXSWITCH_CLI_COMMAND,
+    argv0: options.argv0,
+  }));
+  const child = new EventEmitter();
+  child.killed = false;
+  child.kill = () => { child.killed = true; };
+  process.nextTick(() => child.emit("exit", 0, null));
+  return child;
+};
+syncBuiltinESMExports();
 
 Object.defineProperty(process, "platform", { value: "win32" });
 Object.defineProperty(process, "arch", { value: "x64" });
@@ -129,22 +143,35 @@ await import(${JSON.stringify(wrapperUrl)});
 `);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /windows exe fixture/);
-  assert.match(result.stdout, /args=--profile work/);
-  assert.match(result.stdout, /managed_by_npm=1/);
-  assert.match(result.stdout, /command=codexswitch-cli/);
+  const spawnCall = JSON.parse(result.stdout.trim());
+  assert.match(spawnCall.binaryPath, /codexswitch-cli\.exe$/);
+  assert.deepEqual(spawnCall.args, ["--profile", "work"]);
+  assert.equal(spawnCall.managedByNpm, "1");
+  assert.equal(spawnCall.command, "codexswitch-cli");
+  assert.equal(spawnCall.argv0, "codexswitch-cli");
 });
 
 test("passes through the wrapped binary exit code", (t) => {
   const packageName = "@syntaxskills/codexswitch-cli-linux-x64";
   const packageJsonPath = writePlatformPackage(t, packageName, {
-    "bin/codexswitch-cli": `#!/usr/bin/env bash
-printf 'native args=%s\\n' "$*"
-exit 37
-`,
+    "bin/codexswitch-cli": "native fixture placeholder",
   });
   const result = runInline(`
 ${resolverPatch(packageName, packageJsonPath)}
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import { EventEmitter } from "node:events";
+
+childProcess.spawn = function(binaryPath, args, options) {
+  console.log(JSON.stringify({ binaryPath, args, argv0: options.argv0 }));
+  const child = new EventEmitter();
+  child.killed = false;
+  child.kill = () => { child.killed = true; };
+  process.nextTick(() => child.emit("exit", 37, null));
+  return child;
+};
+syncBuiltinESMExports();
+
 Object.defineProperty(process, "platform", { value: "linux" });
 Object.defineProperty(process, "arch", { value: "x64" });
 process.argv = [process.execPath, "/tmp/codexswitch-cli.js", "doctor", "--json"];
@@ -152,5 +179,8 @@ await import(${JSON.stringify(wrapperUrl)});
 `);
 
   assert.equal(result.status, 37, result.stderr);
-  assert.match(result.stdout, /native args=doctor --json/);
+  const spawnCall = JSON.parse(result.stdout.trim());
+  assert.match(spawnCall.binaryPath, /codexswitch-cli$/);
+  assert.deepEqual(spawnCall.args, ["doctor", "--json"]);
+  assert.equal(spawnCall.argv0, "codexswitch-cli");
 });
