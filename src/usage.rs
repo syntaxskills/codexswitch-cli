@@ -19,6 +19,7 @@ const USAGE_BACKOFF_MAX_MS: u64 = 3_000;
 const USAGE_RETRY_JITTER_MS: u64 = 125;
 #[cfg(not(test))]
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(not(test))]
 const LOCK_RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[cfg(test)]
@@ -680,7 +681,7 @@ pub fn lock_usage(paths: &Paths) -> Result<UsageLock, String> {
                 if start.elapsed() > lock_timeout() {
                     return Err(crate::msg1(USAGE_ERR_LOCK_ACQUIRE, command_name()));
                 }
-                thread::sleep(LOCK_RETRY_DELAY);
+                thread::sleep(lock_retry_delay());
             }
             Err(err) => {
                 return Err(crate::msg1(USAGE_ERR_LOCK_HELD, err));
@@ -702,7 +703,17 @@ fn try_lock(lock: &mut LockFile) -> Result<bool, fslock::Error> {
 
 #[cfg(test)]
 fn lock_timeout() -> Duration {
-    Duration::from_millis(50)
+    Duration::from_millis(500)
+}
+
+#[cfg(not(test))]
+fn lock_retry_delay() -> Duration {
+    LOCK_RETRY_DELAY
+}
+
+#[cfg(test)]
+fn lock_retry_delay() -> Duration {
+    Duration::from_millis(1)
 }
 
 #[cfg(test)]
