@@ -8,7 +8,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const workflow = readFileSync(
   path.join(repoRoot, ".github", "workflows", "release.yml"),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 
 function topLevelBlock(source, name) {
   const match = source.match(new RegExp(`^${name}:\\n((?:^[ \\t]+.*(?:\\n|$))*)`, "m"));
