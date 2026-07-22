@@ -25,8 +25,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: release
-  cancel-in-progress: true
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   tag-check:

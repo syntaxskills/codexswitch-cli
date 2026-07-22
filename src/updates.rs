@@ -6,6 +6,9 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration as StdDuration;
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::{
     Paths, default_profiles_dir, lock_usage, read_profiles_index, write_atomic,
     write_profiles_index,
@@ -26,6 +29,8 @@ const RELEASE_NOTES_URL: &str = "https://github.com/syntaxskills/codexswitch-cli
 const HOMEBREW_CASK_URL_OVERRIDE_ENV_VAR: &str = "CODEXSWITCH_CLI_HOMEBREW_CASK_URL";
 #[cfg(test)]
 const LATEST_RELEASE_URL_OVERRIDE_ENV_VAR: &str = "CODEXSWITCH_CLI_LATEST_RELEASE_URL";
+#[cfg(test)]
+static UPDATE_CACHE_RMW_TEST_DELAY: AtomicBool = AtomicBool::new(false);
 
 /// Update action the CLI should perform after the prompt exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -354,14 +359,16 @@ fn check_for_update_with_action(
         _ => fetch_version_from_release(),
     };
 
+    let _lock = lock_usage(paths)?;
     // Preserve any previously dismissed version if present.
-    let prev_info = read_update_cache(paths).ok().flatten();
+    let prev_info = read_update_cache_unlocked(paths).ok().flatten();
     let prev_dismissed = prev_info
         .as_ref()
         .and_then(|info| info.dismissed_version.clone());
     let prev_prompted = prev_info.as_ref().and_then(|info| info.last_prompted_at);
+    maybe_delay_update_cache_rmw_for_test();
     let info = build_update_cache(latest_version, prev_dismissed, prev_prompted);
-    write_update_cache(paths, &info)
+    write_update_cache_unlocked(paths, &info)
 }
 
 #[doc(hidden)]
@@ -465,13 +472,15 @@ pub fn dismiss_version(config: &UpdateConfig, version: &str) -> Result<(), Strin
         return Ok(());
     }
     let paths = paths_for_update(config.codex_home.clone());
-    let mut info = match read_update_cache(&paths) {
+    let _lock = lock_usage(&paths)?;
+    let mut info = match read_update_cache_unlocked(&paths) {
         Ok(Some(info)) => info,
         _ => return Ok(()),
     };
+    maybe_delay_update_cache_rmw_for_test();
     info.dismissed_version = Some(version.to_string());
     info.last_prompted_at = Some(Utc::now());
-    write_update_cache(&paths, &info)
+    write_update_cache_unlocked(&paths, &info)
 }
 
 fn mark_prompted_now(config: &UpdateConfig) -> Result<(), String> {
@@ -479,12 +488,14 @@ fn mark_prompted_now(config: &UpdateConfig) -> Result<(), String> {
         return Ok(());
     }
     let paths = paths_for_update(config.codex_home.clone());
-    let mut info = match read_update_cache(&paths) {
+    let _lock = lock_usage(&paths)?;
+    let mut info = match read_update_cache_unlocked(&paths) {
         Ok(Some(info)) => info,
         _ => return Ok(()),
     };
+    maybe_delay_update_cache_rmw_for_test();
     info.last_prompted_at = Some(Utc::now());
-    write_update_cache(&paths, &info)
+    write_update_cache_unlocked(&paths, &info)
 }
 
 fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
@@ -494,6 +505,16 @@ fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
     let pat = iter.next()?.parse::<u64>().ok()?;
     Some((maj, min, pat))
 }
+
+#[cfg(test)]
+fn maybe_delay_update_cache_rmw_for_test() {
+    if UPDATE_CACHE_RMW_TEST_DELAY.load(Ordering::SeqCst) {
+        std::thread::sleep(StdDuration::from_millis(10));
+    }
+}
+
+#[cfg(not(test))]
+fn maybe_delay_update_cache_rmw_for_test() {}
 
 fn updates_disabled_with_debug(config: &UpdateConfig, is_debug: bool) -> bool {
     is_debug || !config.check_for_update_on_startup
@@ -513,9 +534,14 @@ fn paths_for_update(codex_home: PathBuf) -> Paths {
 }
 
 fn read_update_cache(paths: &Paths) -> Result<Option<UpdateCache>, String> {
+    let _lock = lock_usage(paths)?;
+    read_update_cache_unlocked(paths)
+}
+
+fn read_update_cache_unlocked(paths: &Paths) -> Result<Option<UpdateCache>, String> {
     if !paths.update_cache.is_file() {
         if let Some(legacy) = read_legacy_update_cache(paths)? {
-            let _ = write_update_cache(paths, &legacy);
+            let _ = write_update_cache_unlocked(paths, &legacy);
             return Ok(Some(legacy));
         }
         return Ok(None);
@@ -528,8 +554,13 @@ fn read_update_cache(paths: &Paths) -> Result<Option<UpdateCache>, String> {
     Ok(Some(cache))
 }
 
+#[cfg(test)]
 fn write_update_cache(paths: &Paths, cache: &UpdateCache) -> Result<(), String> {
     let _lock = lock_usage(paths)?;
+    write_update_cache_unlocked(paths, cache)
+}
+
+fn write_update_cache_unlocked(paths: &Paths, cache: &UpdateCache) -> Result<(), String> {
     let contents = serde_json::to_string_pretty(cache).map_err(|e| e.to_string())?;
     write_atomic(&paths.update_cache, format!("{contents}\n").as_bytes())
 }
@@ -590,6 +621,8 @@ mod tests {
     use crate::test_utils::{ENV_MUTEX, http_ok_response, set_env_guard, spawn_server};
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
 
     fn seed_version_info(config: &UpdateConfig, version: &str) {
         let paths = paths_for_update(config.codex_home.clone());
@@ -602,6 +635,21 @@ mod tests {
             last_prompted_at: None,
         };
         write_update_cache(&paths, &info).unwrap();
+    }
+
+    struct UpdateCacheRmwDelayGuard;
+
+    impl UpdateCacheRmwDelayGuard {
+        fn enable() -> Self {
+            UPDATE_CACHE_RMW_TEST_DELAY.store(true, Ordering::SeqCst);
+            Self
+        }
+    }
+
+    impl Drop for UpdateCacheRmwDelayGuard {
+        fn drop(&mut self) {
+            UPDATE_CACHE_RMW_TEST_DELAY.store(false, Ordering::SeqCst);
+        }
     }
 
     #[test]
@@ -721,6 +769,108 @@ mod tests {
         check_for_update_with_action(&paths, None).unwrap();
         let contents = fs::read_to_string(&paths.update_cache).unwrap();
         assert!(contents.contains("9.9.9"));
+    }
+
+    #[test]
+    fn concurrent_refresh_and_dismiss_preserve_version_and_choice() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+
+        let _delay = UpdateCacheRmwDelayGuard::enable();
+
+        for attempt in 0..20 {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let config = UpdateConfig {
+                codex_home: dir.path().to_path_buf(),
+                check_for_update_on_startup: true,
+            };
+            seed_version_info(&config, "1.0.0");
+            let paths = paths_for_update(config.codex_home.clone());
+
+            let _env = set_env_guard(LATEST_RELEASE_URL_OVERRIDE_ENV_VAR, Some("not-a-url"));
+
+            let start = Arc::new(Barrier::new(3));
+            let refresh_paths = paths_for_update(config.codex_home.clone());
+            let refresh_start = Arc::clone(&start);
+            let refresh = thread::spawn(move || {
+                refresh_start.wait();
+                check_for_update_with_action(&refresh_paths, None)
+            });
+            let dismiss_config = config.clone();
+            let dismiss_start = Arc::clone(&start);
+            let dismiss = thread::spawn(move || {
+                dismiss_start.wait();
+                dismiss_version(&dismiss_config, current_version())
+            });
+
+            start.wait();
+            let refresh_result = refresh.join().unwrap();
+            let dismiss_result = dismiss.join().unwrap();
+            assert!(refresh_result.is_ok(), "refresh failed: {refresh_result:?}");
+            assert!(dismiss_result.is_ok(), "dismiss failed: {dismiss_result:?}");
+
+            let cache = read_update_cache(&paths).unwrap().unwrap();
+            assert_eq!(
+                cache.latest_version,
+                current_version(),
+                "refresh metadata was lost on attempt {attempt}"
+            );
+            assert_eq!(
+                cache.dismissed_version.as_deref(),
+                Some(current_version()),
+                "dismissal was lost on attempt {attempt}"
+            );
+        }
+    }
+
+    #[test]
+    fn concurrent_refresh_and_mark_prompted_preserve_version_and_choice() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let _delay = UpdateCacheRmwDelayGuard::enable();
+
+        for attempt in 0..20 {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let config = UpdateConfig {
+                codex_home: dir.path().to_path_buf(),
+                check_for_update_on_startup: true,
+            };
+            seed_version_info(&config, "1.0.0");
+            let paths = paths_for_update(config.codex_home.clone());
+            let _env = set_env_guard(LATEST_RELEASE_URL_OVERRIDE_ENV_VAR, Some("not-a-url"));
+
+            let start = Arc::new(Barrier::new(3));
+            let refresh_paths = paths_for_update(config.codex_home.clone());
+            let refresh_start = Arc::clone(&start);
+            let refresh = thread::spawn(move || {
+                refresh_start.wait();
+                check_for_update_with_action(&refresh_paths, None)
+            });
+            let prompted_config = config.clone();
+            let prompted_start = Arc::clone(&start);
+            let prompted = thread::spawn(move || {
+                prompted_start.wait();
+                mark_prompted_now(&prompted_config)
+            });
+
+            start.wait();
+            let refresh_result = refresh.join().unwrap();
+            let prompted_result = prompted.join().unwrap();
+            assert!(refresh_result.is_ok(), "refresh failed: {refresh_result:?}");
+            assert!(
+                prompted_result.is_ok(),
+                "mark prompted failed: {prompted_result:?}"
+            );
+
+            let cache = read_update_cache(&paths).unwrap().unwrap();
+            assert_eq!(
+                cache.latest_version,
+                current_version(),
+                "refresh metadata was lost on attempt {attempt}"
+            );
+            assert!(
+                cache.last_prompted_at.is_some(),
+                "prompt choice was lost on attempt {attempt}"
+            );
+        }
     }
 
     #[test]
