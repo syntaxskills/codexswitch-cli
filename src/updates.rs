@@ -4,6 +4,8 @@ use std::fs;
 use std::io::IsTerminal as _;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::thread::JoinHandle;
 use std::time::Duration as StdDuration;
 
 #[cfg(test)]
@@ -27,10 +29,51 @@ const LATEST_RELEASE_URL: &str =
 const RELEASE_NOTES_URL: &str = "https://github.com/syntaxskills/codexswitch-cli/releases/latest";
 #[cfg(test)]
 const HOMEBREW_CASK_URL_OVERRIDE_ENV_VAR: &str = "CODEXSWITCH_CLI_HOMEBREW_CASK_URL";
-#[cfg(test)]
+#[cfg(debug_assertions)]
 const LATEST_RELEASE_URL_OVERRIDE_ENV_VAR: &str = "CODEXSWITCH_CLI_LATEST_RELEASE_URL";
+#[cfg(debug_assertions)]
+const FORCE_UPDATE_CHECK_ENV_VAR: &str = "CODEXSWITCH_CLI_FORCE_UPDATE_CHECK";
 #[cfg(test)]
 static UPDATE_CACHE_RMW_TEST_DELAY: AtomicBool = AtomicBool::new(false);
+static PENDING_UPDATE_CHECK: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
+
+pub(crate) struct PendingUpdateCheckGuard;
+
+impl Drop for PendingUpdateCheckGuard {
+    fn drop(&mut self) {
+        wait_for_pending_update_check();
+    }
+}
+
+pub(crate) fn pending_update_check_guard() -> PendingUpdateCheckGuard {
+    PendingUpdateCheckGuard
+}
+
+fn wait_for_pending_update_check() {
+    let handle = PENDING_UPDATE_CHECK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take();
+    if let Some(handle) = handle {
+        let _ = handle.join();
+    }
+}
+
+fn spawn_update_check(codex_home: PathBuf) {
+    let handle = std::thread::spawn(move || {
+        let paths = paths_for_update(codex_home);
+        if let Err(err) = check_for_update(&paths) {
+            eprintln!("{}", crate::msg1(UPDATE_ERR_REFRESH_VERSION, err));
+        }
+    });
+    let previous = PENDING_UPDATE_CHECK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .replace(handle);
+    if let Some(previous) = previous {
+        let _ = previous.join();
+    }
+}
 
 /// Update action the CLI should perform after the prompt exits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,7 +250,7 @@ fn run_update_prompt_if_needed_with_io_and_source(
     input: &mut impl io::BufRead,
     output: &mut impl Write,
 ) -> Result<UpdatePromptOutcome, String> {
-    if is_debug {
+    if debug_updates_disabled(is_debug) {
         return Ok(UpdatePromptOutcome::Continue);
     }
 
@@ -325,13 +368,7 @@ fn get_upgrade_version_with_debug(config: &UpdateConfig, is_debug: bool) -> Opti
             }
             info = read_update_cache(&paths).ok().flatten();
         } else {
-            let codex_home = config.codex_home.clone();
-            std::thread::spawn(move || {
-                let paths = paths_for_update(codex_home);
-                if let Err(err) = check_for_update(&paths) {
-                    eprintln!("{}", crate::msg1(UPDATE_ERR_REFRESH_VERSION, err));
-                }
-            });
+            spawn_update_check(config.codex_home.clone());
         }
     }
 
@@ -374,7 +411,12 @@ fn check_for_update_with_action(
 #[doc(hidden)]
 pub fn is_newer(latest: &str, current: &str) -> Option<bool> {
     match (parse_version(latest), parse_version(current)) {
-        (Some(l), Some(c)) => Some(l > c),
+        (Some(mut latest), Some(mut current)) => {
+            // Build metadata is not part of SemVer precedence.
+            latest.build = semver::BuildMetadata::EMPTY;
+            current.build = semver::BuildMetadata::EMPTY;
+            Some(latest > current)
+        }
         _ => None,
     }
 }
@@ -498,12 +540,8 @@ fn mark_prompted_now(config: &UpdateConfig) -> Result<(), String> {
     write_update_cache_unlocked(&paths, &info)
 }
 
-fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
-    let mut iter = v.trim().split('.');
-    let maj = iter.next()?.parse::<u64>().ok()?;
-    let min = iter.next()?.parse::<u64>().ok()?;
-    let pat = iter.next()?.parse::<u64>().ok()?;
-    Some((maj, min, pat))
+fn parse_version(v: &str) -> Option<semver::Version> {
+    semver::Version::parse(v.trim()).ok()
 }
 
 #[cfg(test)]
@@ -517,7 +555,15 @@ fn maybe_delay_update_cache_rmw_for_test() {
 fn maybe_delay_update_cache_rmw_for_test() {}
 
 fn updates_disabled_with_debug(config: &UpdateConfig, is_debug: bool) -> bool {
-    is_debug || !config.check_for_update_on_startup
+    debug_updates_disabled(is_debug) || !config.check_for_update_on_startup
+}
+
+fn debug_updates_disabled(is_debug: bool) -> bool {
+    #[cfg(debug_assertions)]
+    if std::env::var_os(FORCE_UPDATE_CHECK_ENV_VAR).is_some() {
+        return false;
+    }
+    is_debug
 }
 
 fn paths_for_update(codex_home: PathBuf) -> Paths {
@@ -589,14 +635,11 @@ fn update_agent() -> ureq::Agent {
 }
 
 fn latest_release_url() -> String {
-    #[cfg(test)]
-    {
-        env_url(LATEST_RELEASE_URL_OVERRIDE_ENV_VAR, LATEST_RELEASE_URL)
+    #[cfg(debug_assertions)]
+    if let Ok(url) = std::env::var(LATEST_RELEASE_URL_OVERRIDE_ENV_VAR) {
+        return url;
     }
-    #[cfg(not(test))]
-    {
-        LATEST_RELEASE_URL.to_string()
-    }
+    LATEST_RELEASE_URL.to_string()
 }
 
 fn homebrew_cask_url() -> String {
@@ -699,8 +742,8 @@ mod tests {
     fn extract_version_helpers() {
         assert_eq!(extract_version_from_latest_tag("v1.2.3").unwrap(), "1.2.3");
         assert_eq!(
-            extract_version_from_latest_tag("rust-v2.0.0").unwrap(),
-            "2.0.0"
+            extract_version_from_latest_tag("rust-v2.0.0-beta.1+build.7").unwrap(),
+            "2.0.0-beta.1+build.7"
         );
         assert!(extract_version_from_latest_tag("bad").is_err());
         let cask = "version \"1.2.3\"";
@@ -709,10 +752,18 @@ mod tests {
     }
 
     #[test]
-    fn parse_version_and_compare() {
-        assert_eq!(parse_version("1.2.3"), Some((1, 2, 3)));
-        assert!(is_newer("2.0.0", "1.9.9").unwrap());
-        assert!(is_newer("bad", "1.0.0").is_none());
+    fn compares_versions_with_semver_precedence() {
+        assert_eq!(is_newer("2.0.0", "1.9.9"), Some(true));
+        assert_eq!(is_newer("1.0.0", "1.0.0-rc.1"), Some(true));
+        assert_eq!(is_newer("1.0.0-beta.11", "1.0.0-beta.2"), Some(true));
+        assert_eq!(is_newer("1.0.0+build.2", "1.0.0+build.1"), Some(false));
+    }
+
+    #[test]
+    fn rejects_non_semver_versions() {
+        for malformed in ["bad", "1.0", "1.0.0-alpha..1", "1.0.0-01", "1.2.3.4"] {
+            assert_eq!(is_newer(malformed, "1.0.0"), None, "accepted {malformed}");
+        }
     }
 
     #[test]
