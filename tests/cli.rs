@@ -448,6 +448,14 @@ fn start_response_server(
     responses: Vec<String>,
     max_requests: usize,
 ) -> std::io::Result<(SocketAddr, thread::JoinHandle<()>)> {
+    start_response_server_after(responses, max_requests, Duration::ZERO)
+}
+
+fn start_response_server_after(
+    responses: Vec<String>,
+    max_requests: usize,
+    response_delay: Duration,
+) -> std::io::Result<(SocketAddr, thread::JoinHandle<()>)> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let addr = listener.local_addr()?;
@@ -463,6 +471,7 @@ fn start_response_server(
                     if responses.is_empty() {
                         break;
                     }
+                    thread::sleep(response_delay);
                     let idx = handled.min(responses.len() - 1);
                     let _ = stream.write_all(&responses[idx]);
                     handled += 1;
@@ -491,6 +500,53 @@ fn start_response_server(
         }
     });
     Ok((addr, handle))
+}
+
+#[test]
+fn short_command_persists_completed_update_refresh() {
+    let env = TestEnv::new();
+    fs::create_dir_all(env.profiles_dir()).expect("create profiles dir");
+    fs::write(env.profiles_dir().join("profiles.lock"), "").expect("write profiles lock");
+    fs::write(
+        env.profiles_dir().join("update.json"),
+        r#"{
+  "latest_version": "1.0.0",
+  "last_checked_at": "2024-01-01T00:00:00Z"
+}
+"#,
+    )
+    .expect("write stale update cache");
+
+    let body = r#"{"tag_name":"v9.9.9"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    let (addr, server) = start_response_server_after(vec![response], 1, Duration::from_millis(100))
+        .expect("start update server");
+
+    let output = Command::new(&env.bin_path)
+        .arg("list")
+        .env("HOME", env.home_path())
+        .env("CODEXSWITCH_CLI_HOME", env.home_path())
+        .env("CODEXSWITCH_CLI_FORCE_UPDATE_CHECK", "1")
+        .env(
+            "CODEXSWITCH_CLI_LATEST_RELEASE_URL",
+            format!("http://{addr}"),
+        )
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::null())
+        .output()
+        .expect("run short command");
+    assert!(
+        output.status.success(),
+        "command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let cache = read_json_file(&env.profiles_dir().join("update.json"));
+    assert_eq!(cache["latest_version"], "9.9.9");
+    server.join().expect("join update server");
 }
 
 fn assert_status_output(env: &TestEnv, args: &[&str], expected_profiles: &[&str]) {

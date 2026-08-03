@@ -188,6 +188,7 @@ dependencies = [
  "fslock",
  "inquire",
  "rayon",
+ "semver",
  "serde",
  "serde_json",
  "serde_with",

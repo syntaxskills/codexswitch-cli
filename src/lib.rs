@@ -85,6 +85,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let paths = resolve_paths()?;
     let json = cli.json;
     let is_doctor = matches!(&cli.command, Commands::Doctor { .. });
+    let _update_check_guard = pending_update_check_guard();
     if !is_doctor {
         ensure_paths(&paths)?;
         let check_for_update_on_startup = std::env::var_os("CODEXSWITCH_CLI_SKIP_UPDATE").is_none();
